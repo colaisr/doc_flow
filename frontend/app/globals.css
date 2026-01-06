@@ -99,5 +99,16 @@ div.react-joyride__beacon__outer,
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* RTL Support for Hebrew */
+  [dir="rtl"] {
+    direction: rtl;
+    text-align: right;
+  }
+  
+  /* Fix for RTL layout - swap padding/margin for common elements */
+  [dir="rtl"] .rtl-swap {
+    direction: rtl;
+  }
 }
 

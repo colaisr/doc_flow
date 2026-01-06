@@ -35,7 +35,7 @@ export default function LayoutWrapper({
       <TopBar />
       <main className={`transition-all duration-300 bg-white ${
         hasBanner ? 'pt-24' : 'pt-16'
-      } ${isCollapsed ? 'lg:ml-20' : 'lg:ml-72'}`}>
+      } ${isCollapsed ? 'lg:mr-20' : 'lg:mr-72'}`}>
         {children}
       </main>
     </div>

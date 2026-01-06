@@ -5,4 +5,8 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8000`;
 
+export function getApiUrl(): string {
+  return API_BASE_URL;
+}
+
 

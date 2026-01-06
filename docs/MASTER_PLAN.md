@@ -1,7 +1,7 @@
 # MASTER PLAN - CRM + Document Signing MVP
 
-**Last Updated:** [To be updated during implementation]  
-**Status:** Planning Phase
+**Last Updated:** December 2024  
+**Status:** Phase 1 Complete, Phase 2 Planning
 
 ---
 
@@ -139,85 +139,91 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `assigned_user_id` (Integer, Foreign Key to User, Optional)
 - `created_by_user_id` (Integer, Foreign Key to User)
 - `source` (String) - `'manual'` or `'form'`
-- `form_submission_id` (Integer, Foreign Key, Optional) - If created from form
+- `deleted_at` (DateTime, Optional) - Soft delete
 - `created_at` (DateTime)
 - `updated_at` (DateTime)
+- **130+ fixed fields** including:
+  - Basic info: `full_name` (required), `client_id`, `phone`, `address`, `email`, `birth_date`
+  - Transaction details: `signing_date`, `plot_number`, `block_number`, `area_sqm`, `transaction_amount`, `legal_fee`, etc.
+  - Document fields: `id_scan`, `signing_documents_word`, `signing_documents_pdf`, etc.
+  - Dates & deadlines: `realization_date`, `report_deadline`, `purchase_tax_payment_deadline`, etc.
+  - Integration IDs: `morning_client_id_company`, `morning_client_id_office`, `invoice_id`, etc.
+  - Status & workflow: `signing_status`, `fee_payment_status`, `client_type`, etc.
+  - Collection & payment: `non_payment_reason`, `collection_notes`, `plot_value`, etc.
+  - And many more...
 
 **Relationships:**
 - Many-to-one with Organization
 - Many-to-one with LeadStage
 - Many-to-one with User (assigned, creator)
-- One-to-many with LeadFieldValues
-- One-to-many with Documents
+- One-to-many with LeadStageHistory
+- One-to-many with Documents (future)
 
-**Custom Fields:**
-- Dynamic field values stored in LeadFieldValue table (key-value pairs)
+**Field Storage Strategy:**
+- All fields stored as fixed columns in Lead table (not dynamic key-value pairs)
+- All organizations use the same 130+ fields
+- Fields organized into logical sections (Basic Info, Transaction, Documents, Dates, etc.)
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
 ### 3.5 LeadFieldValue Model
-**Properties:**
-- `id` (Integer, Primary Key)
-- `lead_id` (Integer, Foreign Key)
-- `field_key` (String) - e.g., `'full_name'`, `'address'`, `'client_id'`
-- `field_value` (Text) - Stored as string, type inferred from field definition
-- `created_at` (DateTime)
-- `updated_at` (DateTime)
+**Status:** ❌ NOT IMPLEMENTED - Using fixed columns in Lead table instead
 
-**Constraints:**
-- Unique constraint on (lead_id, field_key)
-
-**Status:** ⏳ To Be Implemented
+**Note:** All lead fields are stored as fixed columns in the Lead model. No separate LeadFieldValue table needed.
 
 ---
 
 ### 3.6 LeadStage Model
 **Properties:**
 - `id` (Integer, Primary Key)
-- `organization_id` (Integer, Foreign Key, Nullable) - NULL = global/system default
-- `name` (String) - e.g., `'New Lead'`, `'Documents Prepared'`
+- `name` (String) - Stage name in Hebrew
 - `order` (Integer) - Display order
 - `color` (String, Optional) - UI color code
 - `is_default` (Boolean) - First stage for new leads
 - `is_archived` (Boolean) - Archived stage (read-only)
 - `created_at` (DateTime)
+- `updated_at` (DateTime)
 
-**Default Stages:**
-1. New Lead (order: 1)
-2. Documents Prepared (order: 2)
-3. Signing Link Sent (order: 3)
-4. Signed by Client (order: 4)
-5. Signed by Internal (order: 5)
-6. Completed (order: 6)
-7. Archived (order: 7)
+**Default Stages (in Hebrew):**
+1. ליד חדש (New Lead) - order: 1
+2. מסמכים מוכנים (Documents Prepared) - order: 2
+3. לינק חתימה נשלח (Signing Link Sent) - order: 3
+4. חתום על ידי לקוח (Signed by Client) - order: 4
+5. חתום על ידי פנימי (Signed by Internal) - order: 5
+6. הושלם (Completed) - order: 6
+7. בארכיון (Archived) - order: 7
 
-**Status:** ⏳ To Be Implemented
+**Note:** Stages are global (not organization-specific). All organizations use the same stages.
+
+**Status:** ✅ Implemented
+
+---
+
+### 3.6.1 LeadStageHistory Model
+**Properties:**
+- `id` (Integer, Primary Key)
+- `lead_id` (Integer, Foreign Key to Lead)
+- `stage_id` (Integer, Foreign Key to LeadStage)
+- `changed_by_user_id` (Integer, Foreign Key to User)
+- `changed_at` (DateTime) - When stage was changed
+
+**Relationships:**
+- Many-to-one with Lead
+- Many-to-one with LeadStage
+- Many-to-one with User
+
+**Purpose:** Track stage progression history for timeline visualization
+
+**Status:** ✅ Implemented
 
 ---
 
 ### 3.7 LeadFieldDefinition Model
-**Properties:**
-- `id` (Integer, Primary Key)
-- `organization_id` (Integer, Foreign Key, Nullable) - NULL = global/system default
-- `key` (String) - Unique identifier: `'full_name'`, `'email'`, `'address'`, etc.
-- `label` (String) - Display name: `'Full Name'`, `'Email Address'`
-- `type` (String) - `'text'`, `'email'`, `'phone'`, `'date'`, `'number'`, `'textarea'`
-- `required` (Boolean)
-- `is_default` (Boolean) - Pre-defined system fields
-- `order` (Integer) - Display order
-- `created_at` (DateTime)
+**Status:** ❌ NOT IMPLEMENTED - Using fixed columns in Lead table
 
-**Default Fields:**
-- `full_name` (text, required)
-- `email` (email, optional)
-- `phone` (phone, optional)
-- `address` (textarea, optional)
-- `client_id` (text, optional) - Government ID number
-- `notes` (textarea, optional)
-
-**Status:** ⏳ To Be Implemented
+**Note:** Field definitions are managed in the frontend (`frontend/lib/leadFields.ts`) with Hebrew labels. All organizations use the same fixed fields stored as columns in the Lead table. No separate LeadFieldDefinition table needed.
 
 ---
 
@@ -227,7 +233,8 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `organization_id` (Integer, Foreign Key) - **Required**
 - `name` (String)
 - `description` (Text, Optional)
-- `content` (Text) - Rich text HTML with merge fields
+- `content` (Text) - Rich text HTML with merge fields (stored as HTML)
+- `signature_blocks` (Text, Optional) - JSON string with signature block metadata (type, x, y, width, height)
 - `created_by_user_id` (Integer, Foreign Key)
 - `created_at` (DateTime)
 - `updated_at` (DateTime)
@@ -237,15 +244,18 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `{{lead.full_name}}` - Lead's full name
 - `{{lead.email}}` - Lead's email
 - `{{lead.address}}` - Lead's address
-- `{{lead.<field_key>}}` - Any custom lead field
+- `{{lead.<field_key>}}` - Any lead field from the 130+ available fields
 
-**Signature Placeholders:**
-- `{{signature.client}}` - Client signature block
-- `{{signature.internal}}` - Internal (lawyer) signature block
+**Signature Blocks:**
+- Stored as JSON array with metadata: `[{id, type, x, y, width, height, label}]`
+- Types: `'client'` or `'internal'`
+- Draggable and resizable in template editor
+- Positioned absolutely in rendered documents
 
 **Relationships:**
 - Many-to-one with Organization
-- One-to-many with Documents
+- Many-to-one with User (created_by)
+- One-to-many with Documents (future)
 
 **Status:** ⏳ To Be Implemented
 
@@ -258,12 +268,19 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `lead_id` (Integer, Foreign Key) - **Required**
 - `template_id` (Integer, Foreign Key) - Original template
 - `title` (String) - Generated from template name + lead info
-- `rendered_content` (Text) - HTML with merged data (no placeholders)
+- `rendered_content` (Text) - HTML with merged data (no placeholders) - stored in database
+- `pdf_file_path` (String, Optional) - Path/URL to signed PDF file (stored after signing)
+- `signing_url` (String, Optional) - Public signing URL (stored when signing link is created)
 - `status` (String) - `'draft'`, `'sent'`, `'signed_by_client'`, `'signed_by_internal'`, `'completed'`, `'expired'`
 - `created_by_user_id` (Integer, Foreign Key)
 - `created_at` (DateTime)
 - `updated_at` (DateTime)
 - `completed_at` (DateTime, Optional)
+
+**Storage:**
+- Rendered HTML: Database (`rendered_content` field)
+- Signed PDF: File system or cloud storage (path stored in `pdf_file_path`)
+- Signing URL: Stored in `signing_url` field when link is created
 
 **Relationships:**
 - Many-to-one with Organization, Lead, DocumentTemplate
@@ -533,18 +550,26 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Request:**
 ```json
 {
-  "fields": {
-    "full_name": "John Doe",
-    "email": "john@example.com",
-    "phone": "+1234567890",
-    "address": "123 Main St"
-  },
+  "full_name": "John Doe",  // Required
+  "email": "john@example.com",  // Optional
+  "phone": "+1234567890",  // Optional
+  "address": "123 Main St",  // Optional
   "stage_id": 1,  // Optional, defaults to first stage
-  "assigned_user_id": 2  // Optional
+  "assigned_user_id": 2,  // Optional
+  "client_id": "123456789",  // Optional
+  "birth_date": "1990-01-01",  // Optional
+  // ... any of the 130+ lead fields
+  "source": "manual"  // Default: "manual"
 }
 ```
 
-**Status:** ⏳ To Be Implemented
+**Response:**
+- Returns created Lead with all fields
+- Creates initial LeadStageHistory entry
+- Sets organization_id from session context
+- Sets created_by_user_id from current user
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -552,11 +577,11 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Endpoint:** `GET /api/leads`
 
 **Query Parameters:**
-- `stage_id` (Optional) - Filter by stage
-- `assigned_user_id` (Optional) - Filter by assigned user
-- `search` (Optional) - Search in lead fields
-- `page` (Optional) - Pagination
-- `limit` (Optional) - Items per page
+- `stage_id` (Optional, can be multiple) - Filter by stage IDs
+- `assigned_user_id` (Optional, can be multiple) - Filter by assigned user IDs
+- `search` (Optional) - Full-text search across all lead fields
+- `page` (Optional, default: 1) - Pagination page number
+- `limit` (Optional, default: 50) - Items per page
 
 **Response:**
 ```json
@@ -564,16 +589,19 @@ A web-based MVP combining CRM functionality with document generation and electro
   "leads": [
     {
       "id": 1,
-      "fields": {
-        "full_name": "John Doe",
-        "email": "john@example.com"
-      },
+      "organization_id": 1,
+      "stage_id": 1,
+      "full_name": "John Doe",
+      "email": "john@example.com",
+      "phone": "+1234567890",
       "stage": {
         "id": 1,
-        "name": "New Lead"
+        "name": "ליד חדש",
+        "order": 1
       },
       "assigned_user": {
         "id": 2,
+        "email": "lawyer@example.com",
         "full_name": "Jane Lawyer"
       },
       "created_at": "2024-01-01T00:00:00Z"
@@ -581,11 +609,12 @@ A web-based MVP combining CRM functionality with document generation and electro
   ],
   "total": 100,
   "page": 1,
-  "limit": 20
+  "limit": 50,
+  "total_pages": 2
 }
 ```
 
-**Status:** ⏳ To Be Implemented (Placeholder exists)
+**Status:** ✅ Implemented
 
 ---
 
@@ -593,52 +622,91 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Endpoint:** `GET /api/leads/{id}`
 
 **Response:**
-- Full lead data
-- All field values
-- Current stage
-- Stage history (timeline)
-- Related documents
-- Document signing status
+- Full lead data with all 130+ fields
+- Current stage (nested object)
+- Stage history timeline (array of LeadStageHistory)
+- Assigned user (nested object)
+- Created by user (nested object)
+- All lead field values
 
-**Status:** ⏳ To Be Implemented
+**Example Response:**
+```json
+{
+  "id": 1,
+  "organization_id": 1,
+  "full_name": "John Doe",
+  "email": "john@example.com",
+  // ... all 130+ fields
+  "stage": {
+    "id": 1,
+    "name": "ליד חדש"
+  },
+  "stage_history": [
+    {
+      "id": 1,
+      "stage_id": 1,
+      "changed_at": "2024-01-01T00:00:00Z",
+      "stage": {"id": 1, "name": "ליד חדש"},
+      "changed_by_user": {"id": 1, "email": "user@example.com"}
+    }
+  ],
+  "assigned_user": {...},
+  "created_by_user": {...}
+}
+```
+
+**Status:** ✅ Implemented
 
 ---
 
 #### Update Lead
 **Endpoint:** `PUT /api/leads/{id}`
 
-**Request:**
+**Request:** (All fields optional, partial update)
 ```json
 {
-  "fields": {
-    "full_name": "John Doe Updated"
-  },
+  "full_name": "John Doe Updated",
+  "email": "newemail@example.com",
   "stage_id": 2,
   "assigned_user_id": 3
+  // ... any of the 130+ lead fields
 }
 ```
 
-**Status:** ⏳ To Be Implemented
+**Response:**
+- Returns updated Lead with all fields
+- Creates LeadStageHistory entry if stage_id changed
+- Validates email/phone formats if provided
+
+**Status:** ✅ Implemented
 
 ---
 
 #### Delete Lead
 **Endpoint:** `DELETE /api/leads/{id}`
 
-**Status:** ⏳ To Be Implemented
+**Process:**
+- Soft delete: Sets `deleted_at` timestamp
+- Does not permanently remove from database
+- Filtered out from list queries (deleted_at IS NULL)
+
+**Status:** ✅ Implemented
 
 ---
 
 ### 6.2 Lead Stages (Pipeline)
 
 #### List Stages
-**Endpoint:** `GET /api/organizations/{id}/stages`
+**Endpoint:** `GET /api/stages`
 
 **Response:**
-- Organization-specific stages (if configured)
-- Falls back to system default stages
+- All global stages (ordered by `order` ASC)
+- All organizations use the same stages
+- Returns list of stages with: id, name (Hebrew), order, color, is_default, is_archived
 
-**Status:** ⏳ To Be Implemented
+**Note:** Stages are global, not organization-specific. Organizations cannot customize stages.
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -1176,25 +1244,28 @@ A web-based MVP combining CRM functionality with document generation and electro
 ---
 
 ### 14.3 Lead Management Pages
-- `/leads` - Lead list page ⏳ To Be Implemented
-- `/leads/[id]` - Lead details page ⏳ To Be Implemented
+- `/leads` - Lead list page ✅ Implemented
+- `/leads/[id]` - Lead details page ✅ Implemented
 
-**Lead List Features:**
-- Collapsed rows with key information
-- Filters (stage, assigned user)
-- Search
-- Create new lead button
-- Pagination
+**Lead List Features:** ✅ All Implemented
+- Collapsed rows showing: Name, Email, Stage (Hebrew labels)
+- Multi-select filters by stage
+- Full-text search across all fields (debounced)
+- Create new lead modal with form
+- Pagination (50 leads per page, Previous/Next buttons)
+- RTL layout with Hebrew UI
 
-**Lead Details Features:**
-- Full lead data display
-- Stage progression timeline
-- Related documents list
-- Document signing status
-- Assign/unassign user
-- Generate document button
-- Send signing link button
-- Manual stage change
+**Lead Details Features:** ✅ All Implemented
+- Full lead data display with all 130+ fields organized in 12 collapsible sections
+- Hebrew field labels for all fields
+- Inline editing for all fields (click to edit, save/cancel)
+- Horizontal stage progression timeline (responsive, shows history)
+- Stage change dropdown with confirmation
+- User assignment dropdown
+- Delete lead button with confirmation
+- Related documents section (placeholder for Phase 2/3)
+- RTL layout with Hebrew UI
+- Responsive design (mobile and desktop)
 
 ---
 
