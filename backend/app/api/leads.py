@@ -420,7 +420,7 @@ async def delete_lead(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lead not found"
         )
-    
+
     # Soft delete
     lead.deleted_at = datetime.now(timezone.utc)
     db.commit()

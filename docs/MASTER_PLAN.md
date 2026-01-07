@@ -234,7 +234,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `name` (String)
 - `description` (Text, Optional)
 - `content` (Text) - Rich text HTML with merge fields (stored as HTML)
-- `signature_blocks` (Text, Optional) - JSON string with signature block metadata (type, x, y, width, height)
+- `signature_blocks` (Text, Optional) - JSON string with signature block metadata (type, x, y, width, height, label)
 - `created_by_user_id` (Integer, Foreign Key)
 - `created_at` (DateTime)
 - `updated_at` (DateTime)
@@ -247,17 +247,18 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `{{lead.<field_key>}}` - Any lead field from the 130+ available fields
 
 **Signature Blocks:**
-- Stored as JSON array with metadata: `[{id, type, x, y, width, height, label}]`
-- Types: `'client'` or `'internal'`
-- Draggable and resizable in template editor
+- Stored as JSON array with metadata: `[{id, type: 'client', x, y, width, height, label}]`
+- Currently supports only `'client'` type (can be placed multiple times)
+- Draggable and resizable in template editor (Adobe PDF / DocuSign style)
 - Positioned absolutely in rendered documents
+- Coordinates relative to document content area
 
 **Relationships:**
 - Many-to-one with Organization
 - Many-to-one with User (created_by)
 - One-to-many with Documents (future)
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
@@ -780,7 +781,14 @@ A web-based MVP combining CRM functionality with document generation and electro
 #### List Templates
 **Endpoint:** `GET /api/organizations/{id}/templates`
 
-**Status:** ⏳ To Be Implemented
+**Query Parameters:**
+- `search` (Optional) - Search in name and description
+
+**Response:**
+- Returns list of templates for the organization
+- Includes: id, name, description, created_by_user, created_at, updated_at
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -792,45 +800,98 @@ A web-based MVP combining CRM functionality with document generation and electro
 {
   "name": "Real Estate Purchase Agreement",
   "description": "Standard purchase agreement template",
-  "content": "<h1>Purchase Agreement</h1><p>This agreement is between {{lead.full_name}} and...</p>{{signature.client}}{{signature.internal}}"
+  "content": "<p>This agreement is between {{lead.full_name}} and...</p>",
+  "signature_blocks": "[{\"id\":\"sig_123\",\"type\":\"client\",\"x\":297,\"y\":521,\"width\":200,\"height\":80,\"label\":\"חתימת לקוח\"}]"
 }
 ```
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
+
+---
+
+#### Get Template
+**Endpoint:** `GET /api/templates/{id}`
+
+**Response:**
+- Full template data including content and signature_blocks
+
+**Status:** ✅ Implemented
 
 ---
 
 #### Update Template
 **Endpoint:** `PUT /api/templates/{id}`
 
-**Status:** ⏳ To Be Implemented
+**Request:** (All fields optional - partial update)
+```json
+{
+  "name": "Updated Template Name",
+  "content": "<p>Updated content...</p>",
+  "signature_blocks": "[...]"
+}
+```
+
+**Status:** ✅ Implemented
 
 ---
 
 #### Delete Template
 **Endpoint:** `DELETE /api/templates/{id}`
 
-**Status:** ⏳ To Be Implemented
+**Process:**
+- Soft delete: Sets `is_active = false`
+
+**Status:** ✅ Implemented
+
+---
+
+#### Duplicate Template
+**Endpoint:** `POST /api/templates/{id}/duplicate`
+
+**Response:**
+- Creates new template with "העתק של [name]" as the name
+- Copies content and signature_blocks
+
+**Status:** ✅ Implemented
 
 ---
 
 ### 7.2 Template Editor Features
 
-**Rich Text Editor:**
-- Bold, italic, underline
-- Headings, paragraphs, lists
-- Basic formatting
+**Rich Text Editor (Google Docs-style):**
+- Full-page editor with A4 page view
+- Bold, italic, underline formatting
+- Font size dropdown (replaces H1/H2/H3)
+- Text alignment (left, center, right, justify)
+- Bulleted and numbered lists
+- Undo/Redo support
+- Preserves formatting when pasting from Google Docs/Word
+- Multi-page A4 layout with automatic page breaks
+- RTL (right-to-left) support for Hebrew content
 
 **Merge Fields:**
-- Drag-and-drop interface
-- Available lead fields displayed as pills
-- Insertion syntax: `{{lead.<field_key>}}`
+- Panel with available lead fields displayed as pills
+- Click to insert merge field: `{{lead.<field_key>}}`
+- Visual indication in editor (styled differently from regular text)
+- All 130+ lead fields available for insertion
 
 **Signature Blocks:**
-- `{{signature.client}}` - Client signature placeholder
-- `{{signature.internal}}` - Internal lawyer signature placeholder
+- Single signature type: "Customer" (חתימת לקוח)
+- Can be placed multiple times per template
+- Click icon in toolbar → block appears centered on page
+- Drag and drop to position (Adobe PDF / DocuSign style)
+- Resizable via corner handle
+- Delete button on each block
+- Stored as JSON with absolute coordinates (x, y, width, height)
+- Overlay system - blocks appear on top of document content
 
-**Status:** ⏳ To Be Implemented
+**Editor UI:**
+- Full-screen editing mode (sidebar/topbar hidden)
+- Page-based view with shadows (like Google Docs)
+- Automatic page creation when content exceeds A4 height
+- Visual page break indicators
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -1270,15 +1331,27 @@ A web-based MVP combining CRM functionality with document generation and electro
 ---
 
 ### 14.4 Template Management Pages
-- `/templates` - Template list page ⏳ To Be Implemented
-- `/templates/[id]` - Template editor page ⏳ To Be Implemented
+- `/templates` - Template list page ✅ Implemented
+- `/templates/[id]/edit` - Template editor page ✅ Implemented
 
-**Template Editor Features:**
-- Rich text editor
-- Merge field pills (drag-and-drop)
-- Signature block insertion
-- Preview mode
+**Template List Features:** ✅ Implemented
+- List all templates for current organization
+- Search functionality (filters by name/description)
+- "Create New Template" button
+- Actions per template: Edit, Duplicate, Delete
+- Loading and error states
+- Hebrew UI with RTL layout
+
+**Template Editor Features:** ✅ Implemented
+- Full-page Google Docs-style editor
+- Rich text editing with comprehensive toolbar
+- Merge fields panel for inserting lead data placeholders
+- Signature block placement and positioning
+- Auto-save indication (unsaved changes warning)
+- Template name editing inline
 - Save/Cancel buttons
+- Automatic page breaks (A4 layout)
+- Multi-page document support
 
 ---
 
@@ -1399,7 +1472,13 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** [Initial creation]  
-**Next Review:** [After first implementation sprint]
+**Document Version:** 1.1  
+**Last Updated:** December 2024  
+**Latest Changes:**
+- Phase 2 Template Management: DocumentTemplate model, templates API endpoints, template list page, and Google Docs-style template editor with merge fields and signature blocks fully implemented
+- Multi-page A4 layout with automatic page breaks (Google Docs/Word style)
+- Signature block system with drag-and-drop positioning (Adobe PDF / DocuSign style)
+- TipTap rich text editor integration with RTL support and paste formatting preservation
+- Template duplication functionality
+- Full-screen editor mode (sidebar/topbar hidden) for focused editing experience
 

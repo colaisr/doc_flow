@@ -10,6 +10,7 @@ from app.models.platform_settings import PlatformSettings
 from app.models.lead_stage import LeadStage
 from app.models.lead import Lead
 from app.models.lead_stage_history import LeadStageHistory
+from app.models.document_template import DocumentTemplate
 
 __all__ = [
     "User",
@@ -22,5 +23,6 @@ __all__ = [
     "LeadStage",
     "Lead",
     "LeadStageHistory",
+    "DocumentTemplate",
 ]
 

@@ -19,8 +19,9 @@ export default function LayoutWrapper({
   // Pages that should not have sidebar/topbar
   const isAuthPage = pathname === '/' || pathname === '/login' || pathname === '/register'
   const isPublicRAGPage = pathname?.startsWith('/rags/public/')
+  const isTemplateEditor = pathname?.includes('/templates/') && pathname?.includes('/edit')
 
-  if (isAuthPage || isPublicRAGPage) {
+  if (isAuthPage || isPublicRAGPage || isTemplateEditor) {
     return <>{children}</>
   }
 

@@ -3,7 +3,8 @@
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
-import { getLeads, getStages, type Lead, type LeadStage, type ListLeadsParams } from '@/lib/api/leads'
+import { getLeads, type Lead, type LeadStage, type ListLeadsParams } from '@/lib/api/leads'
+import { getStages } from '@/lib/api/stages'
 import { useOrganizationContext } from '@/contexts/OrganizationContext'
 import CreateLeadModal from '@/components/CreateLeadModal'
 

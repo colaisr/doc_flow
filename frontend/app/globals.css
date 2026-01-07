@@ -112,3 +112,119 @@ div.react-joyride__beacon__outer,
   }
 }
 
+/* TipTap Editor RTL and formatting styles */
+.ProseMirror {
+  direction: rtl;
+  text-align: right;
+}
+
+.ProseMirror p {
+  text-align: right;
+  direction: rtl;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  text-align: right;
+  direction: rtl;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-right: 1.5em;
+  padding-left: 0;
+  direction: rtl;
+}
+
+.ProseMirror li {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Preserve formatting from Word/paste */
+.ProseMirror strong {
+  font-weight: bold;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror u {
+  text-decoration: underline;
+}
+
+/* Editor RTL/LTR handling - default RTL */
+.ProseMirror {
+  direction: rtl;
+  text-align: right;
+}
+
+/* When text is left-aligned, use LTR direction */
+.ProseMirror p[style*="text-align: left"],
+.ProseMirror p[style*="text-align: left"] * {
+  direction: ltr !important;
+  text-align: left !important;
+}
+
+/* When text is center-aligned, use LTR direction */
+.ProseMirror p[style*="text-align: center"],
+.ProseMirror p[style*="text-align: center"] * {
+  direction: ltr !important;
+  text-align: center !important;
+}
+
+/* When text is right-aligned, use RTL direction */
+.ProseMirror p[style*="text-align: right"],
+.ProseMirror p[style*="text-align: right"] * {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+/* Ensure proper spacing */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: right;
+  color: #adb5bd;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Merge field styling */
+.ProseMirror .merge-field {
+  background-color: #e0f2fe;
+  border-bottom: 1px dashed #0284c7;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+  color: #0369a1;
+  cursor: default;
+  display: inline-block;
+  direction: rtl;
+}
+
+.ProseMirror .merge-field:hover {
+  background-color: #bae6fd;
+}
+
+/* Google Docs Editor - Page View */
+.google-docs-page {
+  width: 210mm;
+  min-height: 297mm;
+  background: white;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  margin: 20px auto;
+  padding: 20mm;
+}
+
+@media print {
+  .google-docs-page {
+    box-shadow: none;
+    margin: 0;
+  }
+}
+
