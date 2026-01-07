@@ -11,6 +11,9 @@ from app.models.lead_stage import LeadStage
 from app.models.lead import Lead
 from app.models.lead_stage_history import LeadStageHistory
 from app.models.document_template import DocumentTemplate
+from app.models.document import Document
+from app.models.document_signature import DocumentSignature
+from app.models.signing_link import SigningLink
 
 __all__ = [
     "User",
@@ -24,5 +27,8 @@ __all__ = [
     "Lead",
     "LeadStageHistory",
     "DocumentTemplate",
+    "Document",
+    "DocumentSignature",
+    "SigningLink",
 ]
 

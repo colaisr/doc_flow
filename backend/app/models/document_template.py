@@ -24,5 +24,5 @@ class DocumentTemplate(Base):
     # Relationships
     organization = relationship("Organization", back_populates="document_templates")
     created_by_user = relationship("User", foreign_keys=[created_by_user_id])
-    # documents = relationship("Document", back_populates="template")  # For Phase 3
+    documents = relationship("Document", back_populates="template", cascade="all, delete-orphan")
 

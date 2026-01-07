@@ -24,6 +24,7 @@ class Organization(Base):
     invitations = relationship("OrganizationInvitation", back_populates="organization", cascade="all, delete-orphan")
     features = relationship("OrganizationFeature", back_populates="organization", cascade="all, delete-orphan")
     document_templates = relationship("DocumentTemplate", back_populates="organization", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="organization", cascade="all, delete-orphan")
 
 
 class OrganizationMember(Base):

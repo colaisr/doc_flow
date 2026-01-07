@@ -163,4 +163,5 @@ class Lead(Base):
     assigned_user = relationship("User", foreign_keys=[assigned_user_id])
     created_by_user = relationship("User", foreign_keys=[created_by_user_id])
     stage_history = relationship("LeadStageHistory", back_populates="lead", order_by="LeadStageHistory.changed_at")
+    documents = relationship("Document", back_populates="lead", cascade="all, delete-orphan")
 

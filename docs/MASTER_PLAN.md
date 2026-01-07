@@ -288,7 +288,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 - One-to-many with DocumentSignatures
 - One-to-many with SigningLinks
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
@@ -310,7 +310,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Many-to-one with Document
 - Many-to-one with User (optional, for internal signers)
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
@@ -330,7 +330,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Relationships:**
 - Many-to-one with Document
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
@@ -900,35 +900,38 @@ A web-based MVP combining CRM functionality with document generation and electro
 ### 8.1 Generate Document from Template
 
 #### Create Document
-**Endpoint:** `POST /api/leads/{lead_id}/documents`
+**Endpoint:** `POST /api/documents`
 
 **Request:**
 ```json
 {
-  "template_id": 5
+  "template_id": 5,
+  "lead_id": 12,
+  "title": "Optional custom title"
 }
 ```
 
 **Process:**
 1. Fetch template content
 2. Fetch lead field values
-3. Replace merge fields: `{{lead.full_name}}` → actual value
-4. Preserve signature placeholders
-5. Generate rendered HTML
-6. Create Document record with `status = 'draft'`
+3. Validate merge fields against lead fields
+4. Replace merge fields: `{{lead.full_name}}` → actual value (HTML-escaped)
+5. Preserve signature block structure (overlay handled in frontend)
+6. Generate rendered HTML and document title
+7. Create Document record with `status = 'draft'`
 
 **Response:**
 ```json
 {
   "id": 10,
   "title": "Real Estate Purchase Agreement - John Doe",
-  "rendered_content": "<h1>Purchase Agreement</h1><p>This agreement is between John Doe and...</p>{{signature.client}}{{signature.internal}}",
+  "rendered_content": "<h1>Purchase Agreement</h1><p>This agreement is between John Doe and...</p>",
   "status": "draft",
   "created_at": "2024-01-01T00:00:00Z"
 }
 ```
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
@@ -936,15 +939,16 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 **Merge Field Replacement:**
 - Pattern: `{{lead.<field_key>}}`
-- Lookup in LeadFieldValue table
+- Lookup in Lead model fixed columns (130+ fields)
 - Replace with actual value or empty string
 - HTML escape values to prevent XSS
+- RTL preserved (wrapping when missing)
 
 **Signature Placeholder Handling:**
-- `{{signature.client}}` → Rendered as signature block UI (when viewing)
-- `{{signature.internal}}` → Rendered as signature block UI (when viewing)
+- Signature blocks stored as JSON on template; rendered via overlay on frontend
+- Content left intact; blocks handled separately on view/sign
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
@@ -955,10 +959,10 @@ A web-based MVP combining CRM functionality with document generation and electro
 #### Typical Flow:
 1. Document generated from template
 2. User creates signing link for client: `POST /api/documents/{id}/signing-links`
-3. Client receives public link: `GET /api/public/sign/{token}`
-4. Client signs document: `POST /api/public/sign/{token}/sign`
+3. Client receives public link: `GET /api/public/sign/{token}` (TBD)
+4. Client signs document: `POST /api/public/sign/{token}/sign` (TBD)
 5. Document status updates: `'signed_by_client'`
-6. Internal user signs: `POST /api/documents/{id}/sign` (authenticated)
+6. Internal user signs: `POST /api/documents/{id}/sign` (authenticated) (TBD)
 7. Document status updates: `'completed'`
 8. Lead stage may auto-advance (if configured)
 
@@ -974,7 +978,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 {
   "signer_type": "client",
   "intended_signer_email": "client@example.com",
-  "expires_at": "2024-12-31T23:59:59Z"  // Optional
+  "expires_in_days": 7
 }
 ```
 
@@ -983,12 +987,12 @@ A web-based MVP combining CRM functionality with document generation and electro
 {
   "id": 20,
   "token": "abc123xyz789",
-  "public_url": "https://app.example.com/public/sign/abc123xyz789",
+  "signing_url": "https://app.example.com/sign/abc123xyz789",
   "expires_at": "2024-12-31T23:59:59Z"
 }
 ```
 
-**Status:** ⏳ To Be Implemented
+**Status:** ✅ Implemented
 
 ---
 
@@ -1472,13 +1476,12 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.1  
-**Last Updated:** December 2024  
+**Document Version:** 1.2  
+**Last Updated:** January 2026  
 **Latest Changes:**
-- Phase 2 Template Management: DocumentTemplate model, templates API endpoints, template list page, and Google Docs-style template editor with merge fields and signature blocks fully implemented
-- Multi-page A4 layout with automatic page breaks (Google Docs/Word style)
-- Signature block system with drag-and-drop positioning (Adobe PDF / DocuSign style)
-- TipTap rich text editor integration with RTL support and paste formatting preservation
-- Template duplication functionality
-- Full-screen editor mode (sidebar/topbar hidden) for focused editing experience
+- Phase 3.1: Added Document, DocumentSignature, and SigningLink models with migrations and relationships
+- Phase 3.2: Implemented server-side document generation service with merge field validation and HTML escaping (RTL-preserving)
+- Phase 3.3: Added documents API (create/list/get/delete) with organization scoping and merge field validation
+- Phase 3.4: Implemented signing link service and endpoints (token generation, expiration, validation) and document status updates on link creation
+- Phase 2 Template Management: Google Docs-style editor with multi-page A4 layout, merge fields, signature overlay, RTL, paste preservation, duplication, full-screen mode
 
