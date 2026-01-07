@@ -1,7 +1,7 @@
 # MASTER PLAN - CRM + Document Signing MVP
 
-**Last Updated:** December 2024  
-**Status:** Phase 1 Complete, Phase 2 Planning
+**Last Updated:** January 2026  
+**Status:** Phase 1 & 2 Complete, Phase 3 In Progress (3.1-3.4 Complete)
 
 ---
 
@@ -1476,12 +1476,14 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.2  
+**Document Version:** 1.3  
 **Last Updated:** January 2026  
 **Latest Changes:**
-- Phase 3.1: Added Document, DocumentSignature, and SigningLink models with migrations and relationships
-- Phase 3.2: Implemented server-side document generation service with merge field validation and HTML escaping (RTL-preserving)
-- Phase 3.3: Added documents API (create/list/get/delete) with organization scoping and merge field validation
-- Phase 3.4: Implemented signing link service and endpoints (token generation, expiration, validation) and document status updates on link creation
-- Phase 2 Template Management: Google Docs-style editor with multi-page A4 layout, merge fields, signature overlay, RTL, paste preservation, duplication, full-screen mode
+- Phase 3.1: Added Document, DocumentSignature, and SigningLink database models with full relationships
+- Phase 3.2: Implemented document generation service with merge field replacement, HTML escaping, RTL preservation
+- Phase 3.3: Created documents API endpoints (POST/GET/DELETE /api/documents) with organization scoping
+- Phase 3.4: Implemented signing link system with UUID token generation, expiration, validation, and URL generation
+- Added signing link endpoints: POST/GET /api/documents/{id}/signing-links, GET /api/documents/signing-links/{token}/validate
+- Document status auto-updates to 'sent' when signing link is created
+- Phase 2 Complete: Google Docs-style template editor with multi-page A4 layout, merge fields, signature overlay, RTL support
 
