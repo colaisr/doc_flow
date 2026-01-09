@@ -1,8 +1,8 @@
 # PLAN OF WORK - CRM + Document Signing MVP
 
 **Project Start Date:** [To be filled]  
-**Last Updated:** [To be updated during implementation]  
-**Current Phase:** Planning & Discussion
+**Last Updated:** January 2026  
+**Current Phase:** Phase 3 Complete (3.9 Pending), Phase 4-7 Pending
 
 ---
 
@@ -34,8 +34,8 @@ This document serves as our working plan to discuss, plan, and track the step-by
 
 ---
 
-### Phase 1: CRM Foundation - Leads & Stages
-**Status:** PLANNING
+### Phase 1: CRM Foundation - Leads & Stages ✅
+**Status:** COMPLETED
 
 **Goal:** Build the core CRM functionality for managing leads through a pipeline.
 
@@ -550,8 +550,8 @@ This document serves as our working plan to discuss, plan, and track the step-by
 
 ---
 
-### Phase 2: Document Templates
-**Status:** NOT STARTED
+### Phase 2: Document Templates ✅
+**Status:** COMPLETED
 
 **Goal:** Build document template system with rich text editor and merge fields.
 
@@ -1054,8 +1054,8 @@ This document serves as our working plan to discuss, plan, and track the step-by
 
 ---
 
-### Phase 3: Document Generation & Signing
-**Status:** NOT STARTED
+### Phase 3: Document Generation & Signing 🔄
+**Status:** MOSTLY COMPLETED (3.9 PDF Generation Pending)
 
 **Goal:** Generate documents from templates and enable electronic signing.
 
@@ -1091,31 +1091,34 @@ This document serves as our working plan to discuss, plan, and track the step-by
 - Should we store rendered HTML or regenerate on demand? → **DECIDED: Store for audit**
 - File storage location: Local file system or cloud storage (S3, etc.)?
 
-#### 3.2 Document Generation Logic
+#### 3.2 Document Generation Logic ✅
 **Tasks:**
-- [ ] Build merge field replacement engine
-- [ ] Fetch lead field values
-- [ ] Replace `{{lead.<field_key>}}` with actual values
-- [ ] HTML escape values (XSS prevention)
-- [ ] Preserve signature placeholders
-- [ ] Store rendered document
-- [ ] Ensure RTL direction is preserved in rendered HTML (`dir="rtl"`)
+- [x] Build merge field replacement engine
+- [x] Fetch lead field values
+- [x] Replace `{{lead.<field_key>}}` with actual values
+- [x] HTML escape values (XSS prevention)
+- [x] Preserve signature placeholders
+- [x] Store rendered document
+- [x] Ensure RTL direction is preserved in rendered HTML (`dir="rtl"`)
 
 **Discussion Points:**
 - Error handling for missing fields (show placeholder or empty string)?
 - Should we validate all merge fields before generation?
 
 
-#### 3.3 Backend API - Document Generation
+#### 3.3 Backend API - Document Generation ✅
 **Tasks:**
-- [ ] `POST /api/leads/{lead_id}/documents` - Generate document from template
-  - [ ] Request body: `{ "template_id": 5 }`
-  - [ ] Generate document with merged fields
-  - [ ] Store rendered HTML in `Document.rendered_content`
-  - [ ] Return document with `status = 'draft'`
-- [ ] `GET /api/documents/{id}` - Get document details (includes signing_url if exists)
-- [ ] `GET /api/documents/{id}/rendered` - Get rendered HTML (for viewing)
-- [ ] `GET /api/documents/{id}/pdf` - Download signed PDF (if exists)
+- [x] `POST /api/documents` - Create document from template (with `contract_type`)
+  - [x] Request body: `{ "template_id": 5, "lead_id": 12, "contract_type": "buyer" }`
+  - [x] Generate document with merged fields
+  - [x] Store rendered HTML in `Document.rendered_content`
+  - [x] Copy signature blocks from template
+  - [x] Return document with `status = 'draft'`
+- [x] `GET /api/documents/{id}` - Get document details (includes signing_url if exists)
+- [x] `PUT /api/documents/{id}` - Update document (content, title, signature_blocks, status)
+- [x] `DELETE /api/documents/{id}` - Delete document
+- [x] `POST /api/documents/upload` - Upload PDF document (with `document_type`)
+- [x] `GET /api/documents/{id}/pdf` - Download uploaded PDF or signed PDF
 
 **Decisions Made:**
 - ✅ **Document generation:** Synchronous (MVP) - document created immediately
@@ -1125,17 +1128,18 @@ This document serves as our working plan to discuss, plan, and track the step-by
 **Discussion Points:**
 - Should generation be synchronous or async? → **DECIDED: Synchronous for MVP**
 
-#### 3.4 Signing Link System
+#### 3.4 Signing Link System ✅
 **Tasks:**
-- [ ] Generate secure tokens for signing links
-- [ ] `POST /api/documents/{id}/signing-links` - Create signing link
-  - [ ] Generate unique token (UUID recommended)
-  - [ ] Create SigningLink record
-  - [ ] Store signing URL in `Document.signing_url` field
-  - [ ] Return signing URL to frontend
-- [ ] Token validation and expiration handling
-- [ ] Mark links as used after signing
-- [ ] Update `Document.signing_url` when link is created
+- [x] Generate secure tokens for signing links (UUID)
+- [x] `POST /api/documents/{id}/signing-links` - Create signing link
+  - [x] Generate unique token (UUID)
+  - [x] Create SigningLink record
+  - [x] Store signing URL in `Document.signing_url` field
+  - [x] Update document status to 'sent'
+  - [x] Return signing URL to frontend
+- [x] Token validation and expiration handling
+- [x] Mark links as used after signing (when document is finished)
+- [x] Update `Document.signing_url` when link is created
 
 **Decisions Made:**
 - ✅ **Token format:** UUID (secure, unique, URL-safe)
@@ -1147,54 +1151,69 @@ This document serves as our working plan to discuss, plan, and track the step-by
 - Token format (UUID, random string, JWT)? → **DECIDED: UUID**
 - Default expiration period? → **DECIDED: 30 days (configurable)**
 
-#### 3.5 Signature Capture
+#### 3.5 Signature Capture ✅
 **Tasks:**
-- [ ] Choose signature capture library (e.g., react-signature-canvas, signature_pad)
-- [ ] Build signature canvas component
-- [ ] Convert signature to Base64 image
-- [ ] Store signature in database
+- [x] Choose signature capture library (react-signature-canvas)
+- [x] Build signature canvas component (`SignatureCanvas.tsx`)
+- [x] Convert signature to Base64 image (PNG format)
+- [x] Store signature in database (`DocumentSignature.signature_data`)
+- [x] Support mouse and touch input
+- [x] Clear functionality
+- [x] RTL support with Hebrew labels
 
 **Discussion Points:**
 - Signature input method: mouse, touch, or both?
 - Should we support typed signatures as fallback?
 
-#### 3.6 Backend API - Signing
+#### 3.6 Backend API - Signing ✅
 **Tasks:**
-- [ ] `GET /api/public/sign/{token}` - Public signing page data
-- [ ] `POST /api/public/sign/{token}/sign` - Submit client signature
-- [ ] `POST /api/documents/{id}/sign` - Submit internal signature (authenticated)
-- [ ] Update document status based on signatures
-- [ ] Auto-advance lead stage (if configured)
+- [x] `GET /api/public/sign/{token}` - Public signing page data (with signature statuses per block)
+- [x] `POST /api/public/sign/{token}/sign` - Submit client signature (per-block signing with `signature_block_id`)
+- [x] `POST /api/public/sign/{token}/finish` - Finish document signing (when all blocks signed)
+- [x] `POST /api/documents/{id}/sign` - Submit internal signature (authenticated)
+- [x] Update document status based on signatures ('sent' → 'signed')
+- [x] Auto-advance lead stage based on `contract_type`:
+  - [x] Buyer contract → "חתום על ידי לקוח" (Buyer Signed)
+  - [x] Seller contract → "חתום על ידי מוכר" (Seller Signed)
+  - [x] Lawyer contract → "חתום על ידי עורך דין" (Lawyer Signed)
 
 **Discussion Points:**
 - Should stage advancement be automatic or manual?
 - How to handle signature order (enforce sequence)?
 
-#### 3.7 Frontend - Document View
+#### 3.7 Frontend - Document View ✅
 **Tasks:**
-- [ ] Create `/documents/[id]` page
-- [ ] Display rendered document
-- [ ] Show signature status for each signer
-- [ ] "Send Signing Link" button (opens modal)
-- [ ] Generate signing link functionality
+- [x] Create `/documents/[id]/edit` page - Document editor (unified with template editor)
+- [x] Create `/documents/[id]/view` page - Read-only view for signed documents
+- [x] Display rendered document with A4 layout
+- [x] Show signature status for each block (signed blocks show signature image)
+- [x] PDF Export button (opens browser print dialog)
+- [x] Signing link management on contract cards (copy/open/create)
+- [x] Document deletion functionality
 
-#### 3.8 Frontend - Signing Pages
+#### 3.8 Frontend - Signing Pages ✅
 **Tasks:**
-- [ ] Create `/documents/[id]/sign` - Internal signing page (authenticated users)
-  - [ ] Display document content
-  - [ ] Show signature blocks
-  - [ ] Signature canvas component
-  - [ ] Submit signature functionality
-  - [ ] Success/confirmation screen
-- [ ] Create `/public/sign/[token]` - Public signing page (no authentication required)
-  - [ ] Validate token from URL parameter
-  - [ ] Fetch document data using token
-  - [ ] Display document content (read-only, RTL layout)
-  - [ ] Show signature blocks for this signer type (client or internal)
-  - [ ] Signature canvas component
-  - [ ] Submit signature functionality
-  - [ ] Success/confirmation screen
-  - [ ] Handle expired/invalid tokens with error message
+- [x] Create `/documents/[id]/sign` - Internal signing page (authenticated users)
+  - [x] Display document content
+  - [x] Show signature blocks
+  - [x] Signature canvas component
+  - [x] Submit signature functionality
+  - [x] Success/confirmation screen
+  - [x] Auto-advance lead stage
+- [x] Create `/public/sign/[token]` - Public signing page (DocuSign/SignNow style)
+  - [x] Validate token from URL parameter
+  - [x] Fetch document data using token
+  - [x] Display document content (read-only, A4 layout matching editor)
+  - [x] Interactive signature blocks overlay:
+    - [x] Signed blocks show signature image with signer info
+    - [x] Unsigned blocks show clickable placeholder
+  - [x] Per-block signing (click block → modal → sign specific block)
+  - [x] Signature canvas component in modal
+  - [x] Submit signature functionality (per-block)
+  - [x] "Finish" button when all blocks signed
+  - [x] Success/confirmation screen
+  - [x] Handle expired/invalid tokens with error message
+  - [x] Smart workflow hints (sign remaining blocks)
 
 **Decisions Made:**
 - ✅ **Dedicated signing pages:** Yes - separate pages for internal and public signing
@@ -1206,16 +1225,17 @@ This document serves as our working plan to discuss, plan, and track the step-by
 **Discussion Points:**
 - ~~Do we have a dedicated signing page?~~ → **DECIDED: Yes - two pages (public and internal)**
 
-#### 3.9 PDF Generation & Storage
+#### 3.9 PDF Generation & Storage ⏳
 **Tasks:**
+- [x] PDF download endpoint: `GET /api/documents/{id}/pdf` (for uploaded PDFs)
+- [x] PDF file path storage (`pdf_file_path` field in Document model)
+- [x] Browser print dialog for PDF export (temporary solution)
 - [ ] Choose PDF generation library (e.g., xhtml2pdf, pdfkit, or Playwright)
-- [ ] Convert signed HTML documents to PDF
+- [ ] Convert signed HTML documents to PDF programmatically
 - [ ] Ensure RTL/Hebrew formatting is preserved in PDF
 - [ ] Store PDF files (file system or cloud storage)
-- [ ] Update Document model to include PDF file path/URL (`pdf_file_path` field)
-- [ ] Add API endpoint to download PDF: `GET /api/documents/{id}/pdf`
-- [ ] Ensure PDF is generated after all signatures are collected
-- [ ] Auto-generate PDF when document status changes to `'completed'`
+- [ ] Auto-generate PDF when document status changes to `'signed'`
+- [ ] Ensure PDF includes signatures positioned correctly
 
 **Decisions Made:**
 - ✅ **PDF generation requirement:** Signed documents MUST be saved as PDF
@@ -1349,70 +1369,83 @@ storage/
 
 ---
 
-### Phase 6: System Administration Enhancements
-**Status:** NOT STARTED
+### Phase 6: System Administration Enhancements 🔄
+**Status:** PARTIALLY COMPLETED
 
 **Goal:** Complete admin functionality for global configuration.
 
-#### 6.1 Default Lead Fields Management
+#### 6.1 Default Lead Fields Management ⏳
 **Tasks:**
+- [x] Lead fields defined in frontend (`frontend/lib/leadFields.ts`) with Hebrew labels
+- [x] All 130+ fields stored as fixed columns in Lead table
 - [ ] `GET /api/admin/lead-fields` - List default fields
 - [ ] `POST /api/admin/lead-fields` - Create default field
 - [ ] `PUT /api/admin/lead-fields/{id}` - Update default field
 - [ ] `DELETE /api/admin/lead-fields/{id}` - Delete default field
 - [ ] Admin UI for managing default fields
 
-#### 6.2 Default Lead Stages Management
+#### 6.2 Default Lead Stages Management ⏳
 **Tasks:**
-- [ ] `GET /api/admin/lead-stages` - List default stages
+- [x] Default stages seeded in database (7 contract workflow stages + 2 verification stages)
+- [x] Stages are global (all organizations use same stages)
+- [x] `GET /api/stages` - List all stages (implemented)
 - [ ] `POST /api/admin/lead-stages` - Create default stage
 - [ ] `PUT /api/admin/lead-stages/{id}` - Update default stage
 - [ ] `DELETE /api/admin/lead-stages/{id}` - Delete default stage
 - [ ] Admin UI for managing default stages
 
-#### 6.3 Admin UI Updates
+#### 6.3 Admin UI Updates ✅
 **Tasks:**
-- [ ] Update `/admin/settings` page
-- [ ] Add sections for default fields and stages
-- [ ] Improve user management UI
+- [x] Admin panel exists (`/admin/settings`, `/admin/users`)
+- [x] User management UI implemented
+- [ ] Add sections for default fields and stages management
+- [ ] Improve user management UI (enhancements)
 
 **Estimated Duration:** 1 week
 
 ---
 
-### Phase 7: Polish & Testing
-**Status:** NOT STARTED
+### Phase 7: Polish & Testing 🔄
+**Status:** ONGOING (Continuous Improvement)
 
 **Goal:** Refine UI/UX, fix bugs, and prepare for production.
 
-#### 7.1 UI/UX Improvements
+#### 7.1 UI/UX Improvements 🔄
 **Tasks:**
-- [ ] Consistent styling across all pages
-- [ ] Loading states and spinners
-- [ ] Error handling and user-friendly error messages
-- [ ] Responsive design testing (mobile, tablet)
+- [x] Consistent styling across all pages (TailwindCSS)
+- [x] Loading states and spinners (implemented throughout)
+- [x] Error handling and user-friendly error messages (Hebrew messages)
+- [x] Responsive design (mobile and desktop support)
+- [x] RTL layout support (Hebrew interface)
+- [x] Stage timeline UX improvements (shows all stages, completed/current/upcoming)
+- [x] Document upload system with document types
 - [ ] Accessibility improvements (ARIA labels, keyboard navigation)
+- [ ] Further UX refinements based on user feedback
 
-#### 7.2 Testing
+#### 7.2 Testing ⏳
 **Tasks:**
 - [ ] Unit tests for critical backend logic
 - [ ] Integration tests for API endpoints
 - [ ] Frontend component tests (optional for MVP)
-- [ ] End-to-end user flow testing
+- [x] Manual end-to-end user flow testing (ongoing)
 - [ ] Performance testing (large datasets)
+- [ ] Automated testing setup
 
-#### 7.3 Documentation
+#### 7.3 Documentation ✅
 **Tasks:**
+- [x] MASTER_PLAN.md maintained and updated with completed features
+- [x] PLAN_OF_WORK.md tracking implementation progress
 - [ ] API documentation (OpenAPI/Swagger)
 - [ ] User guide/documentation
 - [ ] Deployment guide
-- [ ] Update MASTER_PLAN.md with completed features
 
-#### 7.4 Security Review
+#### 7.4 Security Review ⏳
 **Tasks:**
-- [ ] Security audit (XSS, CSRF, SQL injection)
-- [ ] Input validation review
-- [ ] Authentication/authorization review
+- [x] Input validation (Pydantic schemas)
+- [x] HTML escaping in rendered documents (XSS prevention)
+- [x] SQL injection protection (SQLAlchemy ORM)
+- [x] Authentication/authorization (session-based with organization context)
+- [ ] Security audit (comprehensive review)
 - [ ] Rate limiting (if needed)
 
 **Estimated Duration:** 2 weeks
@@ -1484,14 +1517,20 @@ storage/
 
 ## PROGRESS TRACKING
 
-### Completed Tasks
+### Completed Tasks ✅
 - [x] Phase 0: Foundation & Setup
+- [x] Phase 1: CRM Foundation - Leads & Stages
+- [x] Phase 2: Document Templates
+- [x] Phase 3: Document Generation & Signing (3.1-3.8 Complete)
 
-### In Progress
-- [ ] Phase 1: CRM Foundation
+### In Progress 🔄
+- [ ] Phase 3.9: PDF Generation & Storage (HTML→PDF conversion pending)
+- [ ] Phase 6: System Administration Enhancements (partial - admin panel exists, field/stage management pending)
+- [ ] Phase 7: Polish & Testing (ongoing continuous improvement)
 
-### Next Up
-- [ ] Phase 2: Document Templates
+### Next Up ⏳
+- [ ] Phase 4: Lead Intake Forms
+- [ ] Phase 5: Reports & Analytics
 
 ---
 
@@ -1507,6 +1546,7 @@ storage/
 
 ---
 
-**Document Status:** Active Planning  
-**Next Review:** After Phase 1 completion
+**Document Status:** Active Implementation  
+**Last Major Update:** January 2026  
+**Next Review:** After Phase 3.9 completion or Phase 4 start
 
