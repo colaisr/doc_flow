@@ -6,14 +6,15 @@ import {
   AlignRight, AlignCenter, AlignLeft, 
   List, ListOrdered,
   Undo, Redo,
-  FileText, PenTool
+  FileText, PenTool, Upload
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import MergeFieldsPanel from "./MergeFieldsPanel";
 
 interface GoogleDocsToolbarProps {
   editor: Editor | null;
   onAddSignatureBlock?: (type: 'client' | 'internal') => void;
+  onUploadPDF?: (file: File) => Promise<void>;
 }
 
 const FONT_SIZES = [
@@ -34,9 +35,11 @@ const FONT_SIZES = [
   { label: '72', value: '72' },
 ];
 
-export default function GoogleDocsToolbar({ editor, onAddSignatureBlock }: GoogleDocsToolbarProps) {
+export default function GoogleDocsToolbar({ editor, onAddSignatureBlock, onUploadPDF }: GoogleDocsToolbarProps) {
   const [isFontSizeOpen, setIsFontSizeOpen] = useState(false);
   const [isMergeFieldsPanelOpen, setIsMergeFieldsPanelOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPDF, setIsUploadingPDF] = useState(false);
 
   if (!editor) {
     return null;
@@ -69,6 +72,30 @@ export default function GoogleDocsToolbar({ editor, onAddSignatureBlock }: Googl
       editor.chain().focus().insertMergeField(fieldKey).run();
     } catch (error) {
       console.error('Error inserting merge field:', error);
+    }
+  };
+
+  const handlePDFUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onUploadPDF) return;
+
+    // Validate file type
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      alert('אנא בחר קובץ PDF בלבד');
+      return;
+    }
+
+    setIsUploadingPDF(true);
+    try {
+      await onUploadPDF(file);
+    } catch (error) {
+      console.error('Error uploading PDF:', error);
+    } finally {
+      setIsUploadingPDF(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -238,6 +265,29 @@ export default function GoogleDocsToolbar({ editor, onAddSignatureBlock }: Googl
             >
               <PenTool className="w-5 h-5" />
             </button>
+          )}
+
+          {/* Upload PDF */}
+          {onUploadPDF && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={handlePDFUpload}
+                className="hidden"
+                disabled={isUploadingPDF}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingPDF}
+                className={`${buttonClass(false)} ${isUploadingPDF ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="העלה PDF"
+              >
+                <Upload className="w-5 h-5" />
+              </button>
+            </>
           )}
         </div>
       </div>

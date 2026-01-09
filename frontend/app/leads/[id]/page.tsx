@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getLead, deleteLead, type LeadDetail } from '@/lib/api/leads'
 import { listDocuments, deleteDocument, type Document } from '@/lib/api/documents'
+import { getApiUrl } from '@/lib/config'
 import { LEAD_FIELD_SECTIONS } from '@/lib/leadFields'
 import EditableField from '@/components/EditableField'
 import StageTimeline from '@/components/StageTimeline'
@@ -13,7 +14,9 @@ import UserAssignmentDropdown from '@/components/UserAssignmentDropdown'
 import CollapsibleSection from '@/components/CollapsibleSection'
 import { FileText, Eye, Plus, Copy, ExternalLink, Send, Trash2, MessageCircle, Phone } from 'lucide-react'
 import CreateDocumentModal from '@/components/CreateDocumentModal'
+import UploadDocumentModal from '@/components/UploadDocumentModal'
 import { createSigningLink } from '@/lib/api/documents'
+import { getDocumentTypeById } from '@/lib/documentTypes'
 
 export default function LeadDetailsPage() {
   const router = useRouter()
@@ -31,7 +34,8 @@ export default function LeadDetailsPage() {
   const [showDeleteDocumentConfirm, setShowDeleteDocumentConfirm] = useState<number | null>(null)
   const [deletingDocument, setDeletingDocument] = useState(false)
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false)
-  const [documentsTab, setDocumentsTab] = useState<'contracts' | 'signed'>('contracts')
+  const [showUploadDocumentModal, setShowUploadDocumentModal] = useState(false)
+  const [documentsTab, setDocumentsTab] = useState<'contracts' | 'signed' | 'uploaded'>('contracts')
   const [creatingLinks, setCreatingLinks] = useState<Record<number, boolean>>({})
   const [copiedUrls, setCopiedUrls] = useState<Record<number, boolean>>({})
 
@@ -426,6 +430,16 @@ export default function LeadDetailsPage() {
               >
                 מסמכים חתומים
               </button>
+              <button
+                onClick={() => setDocumentsTab('uploaded')}
+                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                  documentsTab === 'uploaded'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                מסמכי לקוח
+              </button>
             </nav>
           </div>
 
@@ -673,6 +687,93 @@ export default function LeadDetailsPage() {
                   </div>
                 )
               })()}
+              
+              {/* Uploaded Documents Tab */}
+              {documentsTab === 'uploaded' && (() => {
+                const uploadedDocs = documents.filter(doc => doc.status === 'uploaded')
+                return uploadedDocs.length === 0 ? (
+                  <div className="bg-gray-50 rounded-lg p-12 text-center">
+                    <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 text-lg">אין מסמכים מועלים</p>
+                    <p className="text-gray-500 text-sm mt-2">העלה מסמך PDF חדש</p>
+                    <button
+                      onClick={() => setShowUploadDocumentModal(true)}
+                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
+                    >
+                      <Plus className="w-4 h-4" />
+                      העלה מסמך
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {uploadedDocs.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          <FileText className="w-8 h-8 text-gray-400" />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-1">
+                              <h3 className="font-medium text-gray-900">{doc.title}</h3>
+                              {doc.document_type ? (
+                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  {getDocumentTypeById(doc.document_type)?.label || doc.document_type}
+                                </span>
+                              ) : doc.contract_type ? (
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  doc.contract_type === 'buyer' ? 'bg-blue-100 text-blue-800' :
+                                  doc.contract_type === 'seller' ? 'bg-purple-100 text-purple-800' :
+                                  doc.contract_type === 'lawyer' ? 'bg-indigo-100 text-indigo-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {doc.contract_type === 'buyer' ? 'לקוח' :
+                                   doc.contract_type === 'seller' ? 'מוכר' :
+                                   doc.contract_type === 'lawyer' ? 'עורך דין' : 'לא מוגדר'}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                              <span>הועלה ב: {new Date(doc.created_at).toLocaleDateString('he-IL')}</span>
+                              <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
+                                מועלה
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {doc.pdf_file_path && (
+                            <a
+                              href={`${getApiUrl()}/api/documents/${doc.id}/pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                              צפה
+                            </a>
+                          )}
+                          <button
+                            onClick={() => setShowDeleteDocumentConfirm(doc.id)}
+                            className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="מחק מסמך"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            מחק
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setShowUploadDocumentModal(true)}
+                      className="w-full mt-4 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      העלה מסמך נוסף
+                    </button>
+                  </div>
+                )
+              })()}
             </>
           )}
         </div>
@@ -716,22 +817,48 @@ export default function LeadDetailsPage() {
 
       {/* Create Document Modal */}
       {leadId && (
-        <CreateDocumentModal
-          isOpen={showCreateDocumentModal}
-          onClose={() => setShowCreateDocumentModal(false)}
-          leadId={leadId}
-          existingDocuments={documents}
-          onDocumentCreated={(documentId) => {
-            // Refresh documents list
-            if (leadId) {
-              listDocuments({ lead_id: leadId })
-                .then((response) => setDocuments(response.items))
-                .catch(console.error)
-            }
-            // Redirect to document edit page
-            router.push(`/documents/${documentId}/edit`)
-          }}
-        />
+        <>
+          <CreateDocumentModal
+            isOpen={showCreateDocumentModal}
+            onClose={() => setShowCreateDocumentModal(false)}
+            leadId={leadId}
+            existingDocuments={documents}
+            onDocumentCreated={(documentId) => {
+              // Refresh documents list
+              if (leadId) {
+                listDocuments({ lead_id: leadId })
+                  .then((response) => setDocuments(response.items))
+                  .catch(console.error)
+              }
+              // Redirect to document edit page
+              router.push(`/documents/${documentId}/edit`)
+            }}
+          />
+          <UploadDocumentModal
+            isOpen={showUploadDocumentModal}
+            onClose={() => setShowUploadDocumentModal(false)}
+            leadId={leadId}
+            onDocumentUploaded={() => {
+              // Refresh documents list and lead data
+              if (leadId) {
+                listDocuments({ lead_id: leadId })
+                  .then((response) => {
+                    setDocuments(response.items)
+                    // Switch to uploaded tab to show the new document
+                    setDocumentsTab('uploaded')
+                  })
+                  .catch((err) => {
+                    console.error('Failed to refresh documents:', err)
+                    // Still switch to uploaded tab even if refresh fails
+                    setDocumentsTab('uploaded')
+                  })
+                getLead(leadId)
+                  .then((leadData) => setLead(leadData))
+                  .catch(console.error)
+              }
+            }}
+          />
+        </>
       )}
     </div>
   )

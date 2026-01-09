@@ -1,7 +1,9 @@
 import axios from 'axios'
 
 // Create axios instance with interceptor to suppress 401 errors in console
-const apiClient = axios.create()
+const apiClient = axios.create({
+  withCredentials: true, // Always send cookies for authentication
+})
 
 // Request interceptor (optional, for future use)
 apiClient.interceptors.request.use(

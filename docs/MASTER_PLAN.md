@@ -190,14 +190,18 @@ A web-based MVP combining CRM functionality with document generation and electro
 1. ליד חדש (New Lead) - order: 1 - Default stage when lead is created
 2. חוזה לקוח מוכן (Buyer Contract Ready) - order: 2 - When buyer contract is marked as ready
 3. חתום על ידי לקוח (Buyer Signed) - order: 3 - When buyer signs the contract
-4. חוזה מוכר מוכן (Seller Contract Ready) - order: 4 - When seller contract is marked as ready
-5. חתום על ידי מוכר (Seller Signed) - order: 5 - When seller signs the contract
-6. חוזה עורך דין מוכן (Lawyer Contract Ready) - order: 6 - When lawyer contract is marked as ready
-7. חתום על ידי עורך דין (Lawyer Signed) - order: 7 - When lawyer signs the contract (final stage)
+4. מסמכי לקוח מאומתים (Verified Buyer Documents) - order: 4 - When buyer verification document is uploaded
+5. חוזה מוכר מוכן (Seller Contract Ready) - order: 5 - When seller contract is marked as ready
+6. חתום על ידי מוכר (Seller Signed) - order: 6 - When seller signs the contract
+7. מסמכי מוכר מאומתים (Verified Seller Documents) - order: 7 - When seller verification document is uploaded
+8. חוזה עורך דין מוכן (Lawyer Contract Ready) - order: 8 - When lawyer contract is marked as ready
+9. חתום על ידי עורך דין (Lawyer Signed) - order: 9 - When lawyer signs the contract (final stage)
+10. בארכיון (Archived) - order: 10 - Final archived stage
 
 **Note:** Stages advance automatically based on contract actions:
-- Marking contract as "ready" → advances to corresponding "Ready" stage (order 2, 4, or 6)
-- Client signing contract → advances to corresponding "Signed" stage (order 3, 5, or 7)
+- Marking contract as "ready" → advances to corresponding "Ready" stage (order 2, 5, or 8)
+- Client signing contract → advances to corresponding "Signed" stage (order 3, 6, or 9)
+- Uploading verification document → marks corresponding "Verified Documents" stage as complete in history (order 4 or 7) without changing lead's current stage
 
 **Note:** Stages are global (not organization-specific). All organizations use the same stages.
 
@@ -988,6 +992,63 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
+### 8.3 Upload Document (PDF)
+
+#### Upload Document Endpoint
+**Endpoint:** `POST /api/documents/upload`
+
+**Request (multipart/form-data):**
+- `lead_id` (Integer, Required) - Lead ID to attach document to
+- `document_type` (String, Required) - Document type ID (e.g., 'lawyer_approved_buyer_contract', 'lawyer_approved_seller_contract')
+- `file` (File, Required) - PDF file to upload
+
+**Process:**
+1. Validates lead exists and belongs to organization
+2. Validates document_type is provided
+3. Saves PDF file to `storage/uploads/{organization_id}/` directory
+4. Creates Document record with:
+   - `template_id = None` (uploaded documents don't have templates)
+   - `rendered_content = None` (uploaded PDFs don't have HTML content)
+   - `status = 'uploaded'`
+   - `document_type` set to provided value
+   - `pdf_file_path` set to saved file path
+5. Marks corresponding stage as complete in LeadStageHistory (based on DOCUMENT_TYPE_STAGE_MAP)
+6. Does NOT change lead's current stage (allows uploading at any point in workflow)
+
+**Document Types:**
+- `lawyer_approved_buyer_contract` → "מסמכי לקוח מאומתים" (Verified Buyer Documents) stage
+- `lawyer_approved_seller_contract` → "מסמכי מוכר מאומתים" (Verified Seller Documents) stage
+- Extensible system for future document types
+
+**Response:**
+```json
+{
+  "id": 15,
+  "title": "document.pdf - John Doe",
+  "document_type": "lawyer_approved_buyer_contract",
+  "status": "uploaded",
+  "pdf_file_path": "storage/uploads/2/document_15.pdf",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**Status:** ✅ Implemented
+
+---
+
+#### Download Uploaded PDF
+**Endpoint:** `GET /api/documents/{id}/pdf`
+
+**Process:**
+- Validates document exists and belongs to organization
+- Checks document status is 'uploaded'
+- Returns PDF file as FileResponse
+- Requires authentication
+
+**Status:** ✅ Implemented
+
+---
+
 ## 9. ELECTRONIC SIGNING
 
 ### 9.1 Signing Flow
@@ -1530,6 +1591,7 @@ A web-based MVP combining CRM functionality with document generation and electro
     - **Action buttons:**
       - For draft/ready/sent contracts: "ערוך" (Edit) button - opens unified editor
       - For signed contracts: "הצג" (View) button - opens read-only view page with signatures
+      - For uploaded documents: "צפה" (View PDF) button - opens PDF download, "מחק" (Delete) button
 - **Document Creation Modal** (`CreateDocumentModal` component):
   - First step: Contract type selection (Buyer/Seller/Lawyer)
   - Second step: Template selection with visual feedback
@@ -1757,9 +1819,71 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.7  
+**Document Version:** 1.8  
 **Last Updated:** January 2026  
 **Latest Changes:**
+
+- **Document Upload System:**
+  - New document upload functionality for PDF files (separate from contract generation)
+  - Upload endpoint: `POST /api/documents/upload` - accepts PDF file, lead_id, and document_type
+  - PDF download endpoint: `GET /api/documents/{id}/pdf` - serves uploaded PDF files
+  - Document model extended:
+    - Added `document_type` field (String, nullable) - stores document type ID (e.g., 'lawyer_approved_buyer_contract')
+    - Made `template_id` nullable - uploaded documents don't have templates
+    - Made `rendered_content` nullable - uploaded PDFs don't have HTML content
+    - Added `status='uploaded'` for uploaded documents
+  - Document types system (`frontend/lib/documentTypes.ts`):
+    - "מסמכי לקוח מאומתים" (Verified Buyer Documents) - triggers "מסמכי לקוח מאומתים" stage completion
+    - "מסמכי מוכר מאומתים" (Verified Seller Documents) - triggers "מסמכי מוכר מאומתים" stage completion
+    - Extensible system for future document types
+  - UploadDocumentModal component:
+    - Document type dropdown with Hebrew labels
+    - PDF file selection with drag-and-drop support
+    - File validation (PDF only)
+    - Error handling and loading states
+  - Lead Details Page Updates:
+    - New tab: "מסמכי לקוח" (Buyer Documents) - displays uploaded documents (status='uploaded')
+    - Uploaded documents shown with document type badge, upload date, "View PDF" and "Delete" buttons
+    - Empty state with "Upload Document" button
+    - Auto-refresh after upload and switch to uploaded tab
+  - Stage Completion Logic:
+    - Uploading a document marks the corresponding stage as complete in history
+    - Does NOT change the lead's current stage (allows uploading at any point in workflow)
+    - Creates LeadStageHistory entry for the target stage
+    - Prevents duplicate history entries
+
+- **New Lead Stages:**
+  - Added "מסמכי לקוח מאומתים" (Verified Buyer Documents) - order 4 (after "חתום על ידי לקוח")
+  - Added "מסמכי מוכר מאומתים" (Verified Seller Documents) - order 7 (after "חתום על ידי מוכר")
+  - Stages inserted with proper order shifting using Alembic migrations
+  - Stage timeline shows these stages as upcoming until documents are uploaded
+
+- **Stage Timeline Fix:**
+  - Fixed logic to mark stages as completed if they have history entries, regardless of order
+  - Previously only marked stages before current stage as completed
+  - Now allows document uploads to mark stages as complete even if they're after the current stage
+  - Stages with history entries always show as completed (green checkmark)
+
+- **Backend API Updates:**
+  - `POST /api/documents/upload` endpoint:
+    - Accepts multipart/form-data with lead_id, document_type, and file
+    - Validates document_type against DOCUMENT_TYPE_STAGE_MAP
+    - Saves PDF to storage/uploads/{organization_id}/
+    - Creates Document record with status='uploaded'
+    - Marks corresponding stage as complete in history (without changing lead's current stage)
+  - `GET /api/documents/{id}/pdf` endpoint:
+    - Serves uploaded PDF files with proper authentication
+    - Returns FileResponse with PDF content
+  - DocumentResponse schema updated to include `document_type` field
+  - Fixed `created_at` handling for SQLite compatibility (explicit datetime setting)
+
+- **Database Migrations:**
+  - `d1e2f3a4b5c6_add_verified_buyer_documents_stage.py` - Adds "מסמכי לקוח מאומתים" stage
+  - `e2f3a4b5c6d7_make_document_fields_nullable_for_uploads.py` - Makes template_id and rendered_content nullable
+  - `91ddf109f343_add_document_type_field.py` - Adds document_type field
+  - `0177ec7b554d_add_verified_seller_documents_stage.py` - Adds "מסמכי מוכר מאומתים" stage
+
+**Previous Changes:**
 - **PDF Upload Feature:**
   - Added "Upload PDF" button to editor toolbar (templates and documents)
   - Uses `pdfjs-dist` library (v3.11.174) for PDF processing

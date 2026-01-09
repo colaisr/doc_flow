@@ -14,16 +14,17 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey('organizations.id'), nullable=False, index=True)
     lead_id = Column(Integer, ForeignKey('leads.id'), nullable=False, index=True)
-    template_id = Column(Integer, ForeignKey('document_templates.id'), nullable=False, index=True)
+    template_id = Column(Integer, ForeignKey('document_templates.id'), nullable=True, index=True)  # Nullable for uploaded documents
     
     title = Column(String(500), nullable=False)  # Generated from template name + lead info
-    rendered_content = Column(Text, nullable=False)  # HTML with merged data (no placeholders)
+    rendered_content = Column(Text, nullable=True)  # HTML with merged data (no placeholders) - Nullable for uploaded PDFs
     signature_blocks = Column(Text, nullable=True)  # JSON string with signature block metadata (copied from template, can be edited)
     pdf_file_path = Column(String(1000), nullable=True)  # Path/URL to signed PDF file
     signing_url = Column(String(500), nullable=True)  # Public signing URL (stored when signing link is created)
     
     contract_type = Column(String(50), nullable=True)  # 'buyer', 'seller', 'lawyer' - determines which stage this contract is for
-    status = Column(String(50), nullable=False, default='draft')  # 'draft' (being worked on), 'ready' (ready to send), 'sent' (link sent), 'signed' (moved to Documents tab)
+    document_type = Column(String(100), nullable=True)  # Document type ID for uploaded documents (e.g., 'lawyer_approved_buyer_contract')
+    status = Column(String(50), nullable=False, default='draft')  # 'draft' (being worked on), 'ready' (ready to send), 'sent' (link sent), 'signed' (moved to Documents tab), 'uploaded' (uploaded PDF)
     
     created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

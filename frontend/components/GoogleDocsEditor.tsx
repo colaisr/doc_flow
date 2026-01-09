@@ -6,6 +6,7 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
+import Image from "@tiptap/extension-image";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { useEffect, useRef, forwardRef, useImperativeHandle, useCallback, useState } from "react";
 import { FontSize } from "@/lib/tiptap/FontSize";
@@ -24,7 +25,22 @@ interface GoogleDocsEditorProps {
 
 export interface GoogleDocsEditorRef {
   getEditor: () => ReturnType<typeof useEditor>;
+  uploadPDF: (file: File) => Promise<void>;
 }
+
+// Extend TipTap Image: add a marker attribute so we can style PDF pages (only) via CSS.
+const PdfImage = Image.extend({
+  addAttributes() {
+    return {
+      ...(this.parent?.() ?? {}),
+      pdfPage: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-pdf-page"),
+        renderHTML: (attrs) => (attrs.pdfPage ? { "data-pdf-page": attrs.pdfPage } : {}),
+      },
+    };
+  },
+});
 
 // A4 page dimensions in pixels (at 96 DPI)
 const A4_WIDTH_MM = 210;
@@ -87,13 +103,21 @@ const GoogleDocsEditor = forwardRef<GoogleDocsEditorRef, GoogleDocsEditorProps>(
       MergeField,
       Underline,
       TextAlign.configure({
-        types: ['paragraph'],
+        types: ['paragraph', 'image'],
         defaultAlignment: 'right',
       }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
           class: 'text-blue-600 underline cursor-pointer',
+        },
+      }),
+      PdfImage.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: {
+          // Default image behavior. PDF pages are styled via CSS using [data-pdf-page].
+          style: 'display: block; max-width: 100%; height: auto;',
         },
       }),
       Placeholder.configure({
@@ -135,8 +159,131 @@ const GoogleDocsEditor = forwardRef<GoogleDocsEditorRef, GoogleDocsEditorProps>(
     },
   });
 
+  const uploadPDF = useCallback(async (file: File) => {
+    if (!editor || typeof window === 'undefined') return;
+
+    try {
+      console.log('Starting PDF upload for file:', file.name, file.size);
+      
+      // Dynamically import pdfjs-dist only on client side
+      let pdfjsLib;
+      try {
+        // For v3.x, the default export should work
+        const pdfjsModule = await import('pdfjs-dist');
+        // In v3.x, getDocument and other methods are on the module itself
+        pdfjsLib = pdfjsModule;
+        console.log('PDF.js loaded successfully, version:', pdfjsLib.version);
+      } catch (importError: any) {
+        console.error('Failed to import pdfjs-dist:', importError);
+        console.error('Import error details:', {
+          message: importError?.message,
+          stack: importError?.stack,
+          name: importError?.name
+        });
+        throw new Error('Failed to load PDF processing library. Please refresh the page and try again.');
+      }
+      
+      // Configure pdf.js worker (must be done after import and only once)
+      if (!pdfjsLib.GlobalWorkerOptions?.workerSrc) {
+        // Use jsdelivr CDN which is more reliable and has better CORS support
+        // Use the actual installed version
+        const version = pdfjsLib.version || '3.11.174';
+        // For version 3.x, use the standard build path
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.js`;
+        console.log('PDF.js worker configured:', pdfjsLib.GlobalWorkerOptions.workerSrc);
+      }
+
+      console.log('Reading PDF file...');
+      const arrayBuffer = await file.arrayBuffer();
+      console.log('PDF file read, size:', arrayBuffer.byteLength);
+      
+      console.log('Parsing PDF document...');
+      const pdf = await pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        useSystemFonts: true,
+        verbosity: 0, // Suppress warnings
+      }).promise;
+      const numPages = pdf.numPages;
+      console.log('PDF parsed successfully, pages:', numPages);
+
+      // Calculate content area dimensions (A4 page minus padding)
+      const contentAreaWidth = A4_WIDTH_PX - PAGE_PADDING_PX * 2; // 666px
+      const contentAreaHeight = A4_HEIGHT_PX - PAGE_PADDING_PX * 2; // 995px
+      
+      // Use full dimensions to make images fill the page completely
+      // Images will be scaled to fill the width, and height will be proportional
+      const maxImageWidth = contentAreaWidth; // 666px - fill full width
+      const maxImageHeight = contentAreaHeight; // 995px - max height that fits
+      
+      // Render ALL pages and set the editor content in one transaction (stable, no spacing drift).
+      const pageImageUrls: string[] = [];
+
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const initialViewport = page.getViewport({ scale: 1.0 });
+
+        // Render at A4 width for good quality (will be stretched to exact A4 by CSS anyway).
+        const scale = A4_WIDTH_PX / initialViewport.width;
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not get canvas context');
+
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+
+        await page.render({ canvasContext: context, viewport }).promise;
+
+        pageImageUrls.push(canvas.toDataURL('image/png'));
+      }
+
+      // Build a TipTap doc: one paragraph per PDF page, each containing one image node.
+      // No extra paragraphs => no unexpected gaps; CSS handles exact A4 sizing/alignment.
+      editor.commands.setContent({
+        type: 'doc',
+        content: pageImageUrls.map((src, idx) => ({
+          type: 'paragraph',
+          content: [
+            {
+              type: 'image',
+              attrs: {
+                src,
+                alt: `PDF Page ${idx + 1}`,
+                pdfPage: String(idx + 1),
+              },
+            },
+          ],
+        })),
+      } as any);
+
+      console.log(`Inserted ${pageImageUrls.length} PDF pages.`);
+      console.log('PDF upload completed successfully');
+    } catch (error: any) {
+      console.error('Error uploading PDF:', error);
+      
+      let errorMessage = 'שגיאה בטעינת הקובץ PDF. אנא נסה שוב.';
+      
+      if (error?.message) {
+        if (error.message.includes('Invalid PDF')) {
+          errorMessage = 'הקובץ שנבחר אינו קובץ PDF תקין. אנא נסה עם קובץ אחר.';
+        } else if (error.message.includes('worker')) {
+          errorMessage = 'שגיאה בטעינת ספריית עיבוד PDF. אנא רענן את הדף ונסה שוב.';
+        } else if (error.message.includes('Failed to load')) {
+          errorMessage = 'שגיאה בטעינת ספריית עיבוד PDF. אנא רענן את הדף ונסה שוב.';
+        } else {
+          errorMessage = `שגיאה: ${error.message}`;
+        }
+      }
+      
+      alert(errorMessage);
+      throw error;
+    }
+  }, [editor]);
+
   useImperativeHandle(ref, () => ({
     getEditor: () => editor,
+    uploadPDF,
   }));
 
   useEffect(() => {
@@ -204,6 +351,7 @@ const GoogleDocsEditor = forwardRef<GoogleDocsEditorRef, GoogleDocsEditorProps>(
       <GoogleDocsToolbar 
         editor={editor} 
         onAddSignatureBlock={handleAddSignatureBlock}
+        onUploadPDF={uploadPDF}
       />
       
       {/* Document Container - Google Docs style */}
@@ -222,10 +370,14 @@ const GoogleDocsEditor = forwardRef<GoogleDocsEditorRef, GoogleDocsEditorProps>(
             <div
               ref={editorContentRef}
               style={{
-                width: `${A4_WIDTH_PX - PAGE_PADDING_PX * 2}px`,
-                padding: `${PAGE_PADDING_PX}px`,
+                // Important: do NOT add padding here.
+                // ProseMirror already has padding via editorProps.attributes.style.
+                // If we add padding here too, PDF pages get an extra 64px top/left offset (128px total),
+                // which causes the "margin" you see and eventually pushes content to the next page.
+                width: `${A4_WIDTH_PX}px`,
+                padding: `0px`,
                 margin: '0 auto',
-                minHeight: `${CONTENT_HEIGHT_PX}px`,
+                minHeight: `${A4_HEIGHT_PX}px`,
               }}
             >
               <EditorContent editor={editor} />

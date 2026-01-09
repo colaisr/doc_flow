@@ -24,14 +24,15 @@ export interface Document {
   id: number
   organization_id: number
   lead_id: number
-  template_id: number
+  template_id: number | null  // Nullable for uploaded documents
   title: string
-  rendered_content: string
+  rendered_content: string | null  // Nullable for uploaded PDFs
   signature_blocks: string | null  // JSON string with signature block metadata
   pdf_file_path: string | null
   signing_url: string | null
   contract_type: 'buyer' | 'seller' | 'lawyer' | null
-  status: 'draft' | 'ready' | 'sent' | 'signed'
+  document_type: string | null  // Document type ID for uploaded documents
+  status: 'draft' | 'ready' | 'sent' | 'signed' | 'uploaded'
   created_by_user_id: number
   created_at: string
   updated_at: string | null
@@ -297,4 +298,58 @@ export async function finishPublicSigning(token: string): Promise<SubmitPublicSi
   const url = `${getApiUrl()}/api/public/sign/${token}/finish`
   const response = await apiClient.post<SubmitPublicSignatureResponse>(url)
   return response.data
+}
+
+export interface UploadDocumentRequest {
+  lead_id: number
+  document_type: string  // Document type ID (e.g., 'lawyer_approved_buyer_contract')
+  file: File
+}
+
+export async function uploadDocument(data: UploadDocumentRequest): Promise<Document> {
+  const formData = new FormData()
+  formData.append('lead_id', data.lead_id.toString())
+  formData.append('document_type', data.document_type)
+  formData.append('file', data.file)
+  
+  const url = `${getApiUrl()}/api/documents/upload`
+  console.log('Uploading document to:', url)
+  console.log('File size:', data.file.size, 'bytes')
+  console.log('File type:', data.file.type)
+  
+  try {
+    // Don't set Content-Type header - axios will set it automatically with boundary for FormData
+    const response = await apiClient.post<Document>(url, formData, {
+      withCredentials: true,
+      validateStatus: (status) => status < 500, // Don't throw on 4xx errors, let us handle them
+      timeout: 60000, // 60 second timeout for file uploads
+    })
+  
+  if (response.status === 401) {
+    const error: any = new Error('Unauthorized')
+    error.response = { data: response.data, status: 401 }
+    throw error
+  }
+  if (response.status === 400 || response.status === 422) {
+    const error: any = new Error(response.data?.detail || 'Validation error')
+    error.response = { data: response.data, status: response.status }
+    throw error
+  }
+  if (response.status !== 201) {
+    const error: any = new Error(`Failed to upload document: ${response.statusText}`)
+    error.response = { data: response.data, status: response.status }
+    throw error
+  }
+  
+  return response.data
+  } catch (err: any) {
+    console.error('Upload error details:', {
+      message: err.message,
+      code: err.code,
+      response: err.response,
+      request: err.request,
+      config: err.config,
+    })
+    throw err
+  }
 }

@@ -327,6 +327,77 @@ div.react-joyride__beacon__outer,
   padding-top: 0 !important;
 }
 
+/* PDF images should have no margins and fill the page */
+.prose img,
+.ProseMirror img {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  vertical-align: top !important;
+}
+
+/* TipTap wraps images in a node - remove all spacing from image wrappers */
+.ProseMirror [data-type="image"],
+.ProseMirror figure,
+.ProseMirror .image {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+}
+
+/* Remove margins from paragraphs containing images */
+.prose p:has(img),
+.ProseMirror p:has(img) {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+}
+
+/* First image in editor should start at exact top */
+.ProseMirror img:first-of-type {
+  margin-top: 0 !important;
+}
+
+/* Ensure images start at the very top of the editor */
+.ProseMirror > p:first-child:has(img),
+.ProseMirror > :first-child img {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Remove default prose image margins */
+.prose-sm img {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* When a PDF page is inserted, remove editor padding so the page can start at the true top-left.
+   Chrome supports :has(). If needed later, we can add a class-based fallback. */
+.ProseMirror:has(img[data-pdf-page]) {
+  padding: 0 !important;
+  width: 794px !important;   /* full A4 width */
+}
+
+/* PDF page images should fill the FULL A4 page area */
+.ProseMirror img[data-pdf-page] {
+  width: 794px !important;   /* full A4 width */
+  height: 1123px !important; /* full A4 height */
+  object-fit: fill !important;
+  object-position: top left !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 2px solid red !important;
+  box-sizing: border-box !important;
+}
+
+/* Remove spacing around paragraphs that contain PDF images */
+.ProseMirror p:has(> img[data-pdf-page]) {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+}
+
 .prose ul,
 .prose ol {
   margin-top: 1.25em;

@@ -1,19 +1,23 @@
 """
 Documents API endpoints - document generation and management.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi import Request
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+import os
+from pathlib import Path
+from fastapi.responses import FileResponse
 from app.core.database import get_db
 from app.core.auth import get_current_user_dependency, get_current_organization_dependency
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.lead import Lead
 from app.models.lead_stage import LeadStage
+from app.models.lead_stage_history import LeadStageHistory
 from app.models.document_template import DocumentTemplate
 from app.models.document import Document
 from app.models.document_signature import DocumentSignature
@@ -95,14 +99,15 @@ class DocumentResponse(BaseModel):
     id: int
     organization_id: int
     lead_id: int
-    template_id: int
+    template_id: Optional[int] = None  # Nullable for uploaded documents
     title: str
-    rendered_content: str
+    rendered_content: Optional[str] = None  # Nullable for uploaded PDFs
     signature_blocks: Optional[str] = None  # JSON string with signature block metadata
     pdf_file_path: Optional[str] = None
     signing_url: Optional[str] = None
     contract_type: Optional[str] = None  # 'buyer', 'seller', 'lawyer'
-    status: str  # 'draft', 'ready', 'sent', 'signed'
+    document_type: Optional[str] = None  # Document type ID for uploaded documents (e.g., 'lawyer_approved_buyer_contract')
+    status: str  # 'draft', 'ready', 'sent', 'signed', 'uploaded'
     created_by_user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -245,7 +250,8 @@ async def create_document(
         signature_blocks=signature_blocks,  # Copy from template
         contract_type=document_data.contract_type,  # 'buyer', 'seller', or 'lawyer'
         status='draft',  # Initial status: draft (being worked on)
-        created_by_user_id=current_user.id
+        created_by_user_id=current_user.id,
+        created_at=datetime.utcnow()  # Explicitly set created_at for SQLite compatibility
     )
     
     db.add(new_document)
@@ -296,11 +302,14 @@ async def list_documents(
     offset = (page - 1) * limit
     documents = query.order_by(Document.created_at.desc()).offset(offset).limit(limit).all()
     
-    # Load basic relationships
+    # Load basic relationships and fix null created_at values
     for doc in documents:
         doc.created_by_user = db.query(User).filter(User.id == doc.created_by_user_id).first()
         doc.template = db.query(DocumentTemplate).filter(DocumentTemplate.id == doc.template_id).first()
         doc.lead = db.query(Lead).filter(Lead.id == doc.lead_id).first()
+        # Fix null created_at for SQLite compatibility (set default for response only)
+        if doc.created_at is None:
+            doc.created_at = datetime.utcnow()
     
     # Calculate total pages
     total_pages = (total + limit - 1) // limit
@@ -755,3 +764,171 @@ async def submit_internal_signature(
             detail=f"Failed to submit signature: {str(e)}"
         )
 
+
+
+@router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    lead_id: int = Form(...),
+    document_type: str = Form(...),  # Document type ID (e.g., 'lawyer_approved_buyer_contract')
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user_dependency),
+    current_organization: Organization = Depends(get_current_organization_dependency),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload a PDF document for a lead.
+    
+    This endpoint:
+    1. Validates the lead exists and belongs to the organization
+    2. Validates document_type is provided
+    3. Saves the uploaded PDF file
+    4. Creates a Document record with status='uploaded'
+    5. Advances lead stage based on document_type configuration
+    """
+    # Validate document_type is provided
+    if not document_type or not document_type.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="document_type is required"
+        )
+    
+    # Verify lead exists and belongs to organization
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id,
+        Lead.organization_id == current_organization.id,
+        Lead.deleted_at.is_(None)
+    ).first()
+    
+    if not lead:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lead not found or not accessible"
+        )
+    
+    # Validate file type (PDF only)
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF files are allowed"
+        )
+    
+    # Create storage directory if it doesn't exist
+    storage_dir = Path("storage") / "uploads" / str(current_organization.id)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate unique filename
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename = f"{lead_id}_{timestamp}_{file.filename}"
+    file_path = storage_dir / filename
+    
+    # Save file
+    try:
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save file: {str(e)}"
+        )
+    
+    # Document type configuration - maps document_type IDs to stage names they trigger
+    # This should match the frontend DOCUMENT_TYPES configuration
+    DOCUMENT_TYPE_STAGE_MAP = {
+        'lawyer_approved_buyer_contract': 'מסמכי לקוח מאומתים',
+        'lawyer_approved_seller_contract': 'מסמכי מוכר מאומתים',
+    }
+    
+    # Create document record
+    new_document = Document(
+        organization_id=current_organization.id,
+        lead_id=lead.id,
+        template_id=None,  # Uploaded documents don't have templates
+        title=f"{file.filename} - {lead.full_name or 'ליד'}",
+        rendered_content=None,  # Uploaded PDFs don't have HTML content
+        signature_blocks=None,  # Uploaded documents don't have signature blocks
+        pdf_file_path=str(file_path),
+        document_type=document_type,  # Store document type ID
+        status='uploaded',  # Special status for uploaded documents
+        created_by_user_id=current_user.id,
+        created_at=datetime.utcnow()  # Explicitly set created_at for SQLite compatibility
+    )
+    
+    db.add(new_document)
+    db.flush()
+    
+    # Mark stage as complete based on document_type configuration
+    # For document uploads, we mark the stage as complete in history without changing the lead's current stage
+    # because document verification can happen at any point in the workflow
+    target_stage_name = DOCUMENT_TYPE_STAGE_MAP.get(document_type)
+    if target_stage_name:
+        target_stage = db.query(LeadStage).filter(
+            LeadStage.name == target_stage_name
+        ).first()
+        
+        if target_stage:
+            # Check if this stage is already marked as complete in history
+            existing_history = db.query(LeadStageHistory).filter(
+                LeadStageHistory.lead_id == lead.id,
+                LeadStageHistory.stage_id == target_stage.id
+            ).first()
+            
+            # Only create history entry if it doesn't already exist
+            if not existing_history:
+                # Create stage history entry to mark this stage as complete
+                history_entry = LeadStageHistory(
+                    lead_id=lead.id,
+                    stage_id=target_stage.id,
+                    changed_by_user_id=current_user.id
+                )
+                db.add(history_entry)
+    
+    db.commit()
+    db.refresh(new_document)
+    
+    # Load relationships for response
+    new_document.created_by_user = current_user
+    new_document.lead = lead
+    
+    return new_document
+
+
+@router.get("/{document_id}/pdf")
+async def download_document_pdf(
+    document_id: int,
+    current_user: User = Depends(get_current_user_dependency),
+    current_organization: Organization = Depends(get_current_organization_dependency),
+    db: Session = Depends(get_db)
+):
+    """
+    Download PDF file for a document.
+    """
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.organization_id == current_organization.id
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if not document.pdf_file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF file not found for this document"
+        )
+    
+    file_path = Path(document.pdf_file_path)
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF file not found on server"
+        )
+    
+    return FileResponse(
+        path=str(file_path),
+        media_type='application/pdf',
+        filename=file_path.name
+    )

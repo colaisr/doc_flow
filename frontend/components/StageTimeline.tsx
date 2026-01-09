@@ -55,11 +55,10 @@ export default function StageTimeline({ stageHistory, currentStageId }: StageTim
 
     if (stage.id === currentStageId) {
       status = 'current'
-    } else if (historyEntry && stage.order < currentOrder) {
+    } else if (historyEntry) {
+      // If there's a history entry, mark as completed regardless of order
+      // This allows document uploads to mark stages as complete even if they're after the current stage
       status = 'completed'
-    } else if (historyEntry && stage.order === currentOrder) {
-      // This handles edge case where history exists but stage was changed
-      status = stage.id === currentStageId ? 'current' : 'completed'
     } else {
       status = 'upcoming'
     }
