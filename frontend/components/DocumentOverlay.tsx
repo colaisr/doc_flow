@@ -100,13 +100,20 @@ export default function DocumentOverlay({
       const overlayRect = overlay.getBoundingClientRect();
 
       if (dragState.isDragging && dragState.blockId) {
-        const deltaX = e.clientX - dragState.startX;
-        const deltaY = e.clientY - dragState.startY;
-
         const block = signatureBlocks.find((b) => b.id === dragState.blockId);
         if (!block) return;
 
-        // Calculate new position
+        // Convert mouse coordinates to overlay-relative coordinates
+        const currentMouseX = e.clientX - overlayRect.left;
+        const currentMouseY = e.clientY - overlayRect.top;
+        const startMouseX = dragState.startX - overlayRect.left;
+        const startMouseY = dragState.startY - overlayRect.top;
+        
+        // Calculate delta in overlay-relative coordinates
+        const deltaX = currentMouseX - startMouseX;
+        const deltaY = currentMouseY - startMouseY;
+
+        // Calculate new position (both in overlay-relative coordinates)
         let newX = dragState.originalX + deltaX;
         let newY = dragState.originalY + deltaY;
 
@@ -181,6 +188,17 @@ export default function DocumentOverlay({
         const isSelected = selectedId === block.id;
         const isDragging = dragState.isDragging && dragState.blockId === block.id;
         const isResizing = resizeState.isResizing && resizeState.blockId === block.id;
+
+        // Debug: log first block position in editor
+        if (signatureBlocks.indexOf(block) === 0) {
+          console.debug('[DocumentOverlay] first block pos', {
+            id: block.id,
+            x: block.x,
+            y: block.y,
+            width: block.width,
+            height: block.height,
+          });
+        }
 
         return (
           <div

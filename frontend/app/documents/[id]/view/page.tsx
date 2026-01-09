@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { getDocument, type Document, type DocumentSignature } from '@/lib/api/documents'
 import { deserializeSignatureBlocks, type SignatureBlock } from '@/lib/signatureBlocks'
 import { FileText, Download, ArrowRight, CheckCircle } from 'lucide-react'
+import DocumentPage from '@/components/DocumentPage'
 
 export default function DocumentViewPage() {
   const router = useRouter()
@@ -247,56 +248,25 @@ export default function DocumentViewPage() {
 
       {/* Document Content with Signatures */}
       <div className="flex-1 overflow-auto bg-gray-100 py-8">
-        <div className="flex justify-center">
-          {/* Document wrapper - matches editor structure */}
-          <div
-            className="relative bg-white shadow-lg"
-            style={{
-              width: '794px', // A4 width at 96 DPI (210mm)
-              minHeight: '1123px', // A4 height at 96 DPI (297mm)
-              maxWidth: '100%',
-            }}
-          >
-            {/* Document Content Area */}
-            <div
-              className="ProseMirror"
-              style={{
-                width: '666px', // 794px - (64px * 2) = 666px
-                padding: '64px', // 16 * 4 = 64px (p-16)
-                margin: '0 auto',
-                minHeight: '995px', // 1123px - (64px * 2) = 995px
-              }}
-              dir="rtl"
-            >
-              {/* Document Content */}
-              <div
-                className="prose prose-lg max-w-none"
-                style={{
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                }}
-                dangerouslySetInnerHTML={{ __html: document.rendered_content }}
-              />
-            </div>
-
-            {/* Signature Blocks Overlay - show signed signatures */}
-            {signatureBlocks.length > 0 && (
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  zIndex: 20,
-                }}
-              >
+        <DocumentPage
+          htmlContent={document.rendered_content}
+          overlay={
+            signatureBlocks.length > 0 ? (
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 20 }}>
                 {signatureBlocks.map((block) => {
                   const signature = signatureMap.get(block.id)
                   const isSigned = !!signature
 
-                  // Signature block coordinates handling (same as SigningOverlay)
-                  const PAGE_PADDING_PX = 64
-                  const OLD_FORMAT_THRESHOLD = 280
-                  const needsOffset = block.x < OLD_FORMAT_THRESHOLD
-                  const x = needsOffset ? block.x + PAGE_PADDING_PX : block.x
-                  const y = needsOffset ? block.y + PAGE_PADDING_PX : block.y
+                  const x = block.x
+                  const y = Math.max(0, block.y - 64)
+
+                  if (signatureBlocks.indexOf(block) === 0) {
+                    console.debug('[DocumentView] first block pos', {
+                      id: block.id,
+                      raw: { x: block.x, y: block.y },
+                      applied: { x, y },
+                    })
+                  }
 
                   return (
                     <div
@@ -308,15 +278,28 @@ export default function DocumentViewPage() {
                         width: `${block.width}px`,
                         height: `${block.height}px`,
                         zIndex: 10,
+                        boxSizing: 'border-box',
+                        position: 'absolute',
                       }}
                     >
                       {isSigned && signature.signature_data ? (
-                        // Signed block - show signature image
-                        <div className="w-full h-full border-2 border-green-500 bg-white rounded flex items-center justify-center p-2">
+                        <div
+                          className="w-full h-full border-2 border-green-500 bg-white rounded overflow-hidden relative"
+                          style={{
+                            width: `${block.width}px`,
+                            height: `${block.height}px`,
+                            boxSizing: 'border-box',
+                          }}
+                        >
                           <img
                             src={signature.signature_data}
                             alt={`חתימה ${signature.signer_name || ''}`}
-                            className="max-w-full max-h-full object-contain"
+                            className="w-full h-full object-contain"
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '100%',
+                              display: 'block',
+                            }}
                           />
                           {signature.signer_name && (
                             <div className="absolute bottom-0 left-0 right-0 bg-green-100 text-green-800 text-xs text-center py-1 px-2 rounded-b">
@@ -330,7 +313,6 @@ export default function DocumentViewPage() {
                           )}
                         </div>
                       ) : (
-                        // Unsigned block - show placeholder (shouldn't happen for signed documents)
                         <div className="w-full h-full border-2 border-dashed border-gray-300 bg-gray-50 rounded flex flex-col items-center justify-center">
                           <span className="text-xs text-gray-500 text-center px-2">
                             {block.label || 'לא חתום'}
@@ -341,10 +323,9 @@ export default function DocumentViewPage() {
                   )
                 })}
               </div>
-            )}
-
-          </div>
-        </div>
+            ) : null
+          }
+        />
       </div>
     </div>
   )

@@ -17,14 +17,21 @@ export default function SigningOverlay({
   contentAreaRef,
   onBlockClick,
 }: SigningOverlayProps) {
-  // Constants matching editor
-  const PAGE_PADDING_PX = 64; // 16 * 4 = 64px (p-16)
-  
   // Create a map of block_id -> status
   const statusMap = new Map<string, SignatureBlockStatus>()
   signatureStatuses.forEach(status => {
     statusMap.set(status.block_id, status)
   })
+
+  // Debug: log first block position to compare editor vs signing page
+  if (signatureBlocks.length > 0) {
+    const b = signatureBlocks[0]
+    console.debug('[SigningOverlay] first block pos', {
+      id: b.id,
+      raw: { x: b.x, y: b.y, width: b.width, height: b.height },
+      applied: { x: b.x, y: b.y, width: b.width, height: b.height },
+    })
+  }
 
   return (
     <div
@@ -37,43 +44,47 @@ export default function SigningOverlay({
         const status = statusMap.get(block.id)
         const isSigned = status?.is_signed ?? false
 
-        // Signature block coordinates handling:
-        // - Blocks created with old code: relative to content area (centered x ~233)
-        // - Blocks created with new code: relative to page wrapper (centered x ~297)
-        // - Blocks that were dragged: relative to page wrapper (can be any value)
-        // 
-        // Heuristic: if x is less than 280 (midpoint between old ~233 and new ~297),
-        // it's likely old format (content-relative), so add padding offset.
-        // Otherwise, it's new format or dragged (page-relative), use as-is.
-        const OLD_FORMAT_THRESHOLD = 280; // Midpoint between old (233) and new (297) centered positions
-        const needsOffset = block.x < OLD_FORMAT_THRESHOLD;
-        const x = needsOffset ? block.x + PAGE_PADDING_PX : block.x;
-        const y = needsOffset ? block.y + PAGE_PADDING_PX : block.y;
+        // Apply a consistent upward correction to match editor layout
+        const x = block.x;
+        const y = Math.max(0, block.y - 64);
 
         return (
           <div
             key={block.id}
-            className="absolute pointer-events-auto cursor-pointer transition-all hover:shadow-lg"
+            className="absolute pointer-events-auto"
             style={{
               left: `${x}px`,
               top: `${y}px`,
               width: `${block.width}px`,
               height: `${block.height}px`,
               zIndex: isSigned ? 10 : 20,
+              // Ensure block maintains exact position and size
+              boxSizing: 'border-box',
             }}
-            onClick={() => !isSigned && onBlockClick(block.id)}
           >
             {isSigned ? (
-              // Signed block - show signature image
-              <div className="w-full h-full border-2 border-green-500 bg-white rounded flex items-center justify-center p-2">
+              // Signed block - show signature image (maintains exact size)
+              <div 
+                className="w-full h-full border-2 border-green-500 bg-white rounded overflow-hidden relative"
+                style={{
+                  width: `${block.width}px`,
+                  height: `${block.height}px`,
+                  boxSizing: 'border-box',
+                }}
+              >
                 {status.signature_data ? (
                   <img
                     src={status.signature_data}
                     alt={`חתימה ${status.signer_name || ''}`}
-                    className="max-w-full max-h-full object-contain"
+                    className="w-full h-full object-contain"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      display: 'block',
+                    }}
                   />
                 ) : (
-                  <div className="flex flex-col items-center gap-2 text-green-600">
+                  <div className="flex flex-col items-center justify-center w-full h-full text-green-600">
                     <CheckCircle className="w-8 h-8" />
                     <span className="text-xs font-medium">חתום</span>
                   </div>
@@ -85,8 +96,16 @@ export default function SigningOverlay({
                 )}
               </div>
             ) : (
-              // Unsigned block - show placeholder with click action
-              <div className="w-full h-full border-2 border-dashed border-blue-400 bg-blue-50 rounded flex flex-col items-center justify-center hover:bg-blue-100 hover:border-blue-500 transition-colors">
+              // Unsigned block - show placeholder with click action (maintains exact size)
+              <div 
+                className="w-full h-full border-2 border-dashed border-blue-400 bg-blue-50 rounded flex flex-col items-center justify-center hover:bg-blue-100 hover:border-blue-500 transition-colors cursor-pointer"
+                style={{
+                  width: `${block.width}px`,
+                  height: `${block.height}px`,
+                  boxSizing: 'border-box',
+                }}
+                onClick={() => onBlockClick(block.id)}
+              >
                 <Pen className="w-6 h-6 text-blue-600 mb-2" />
                 <span className="text-xs font-medium text-blue-800 text-center px-2">
                   {block.label || 'לחץ לחתימה'}

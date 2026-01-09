@@ -6,6 +6,7 @@ import { getPublicSigningPage, submitPublicSignature, finishPublicSigning, type 
 import { deserializeSignatureBlocks, type SignatureBlock } from '@/lib/signatureBlocks'
 import SignatureCanvas, { type SignatureCanvasRef } from '@/components/SignatureCanvas'
 import SigningOverlay from '@/components/SigningOverlay'
+import DocumentPage from '@/components/DocumentPage'
 import { CheckCircle, XCircle, AlertCircle, FileText, X, Pen } from 'lucide-react'
 
 export default function PublicSigningPage() {
@@ -251,50 +252,19 @@ export default function PublicSigningPage() {
 
       {/* Document Content with Overlay - matches editor layout exactly */}
       <div className="flex-1 overflow-auto bg-gray-100 py-8">
-        <div className="flex justify-center">
-          {/* Document wrapper - matches editor structure */}
-          <div
-            className="relative bg-white shadow-lg"
-            style={{
-              width: '794px', // A4 width at 96 DPI (210mm)
-              minHeight: '1123px', // A4 height at 96 DPI (297mm)
-              maxWidth: '100%',
-            }}
-          >
-            {/* Document Content Area - matches editor exactly */}
-            <div
-              ref={contentAreaRef}
-              className="ProseMirror"
-              style={{
-                width: '666px', // 794px - (64px * 2) = 666px (matches editor)
-                padding: '64px', // 16 * 4 = 64px (p-16) - matches editor
-                margin: '0 auto',
-                minHeight: '995px', // 1123px - (64px * 2) = 995px
-              }}
-              dir="rtl"
-            >
-              {/* Document Content */}
-              <div
-                className="prose prose-lg max-w-none"
-                style={{
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                }}
-                dangerouslySetInnerHTML={{ __html: documentData.rendered_content }}
-              />
-            </div>
-
-            {/* Signature Blocks Overlay - positioned relative to page wrapper */}
-            {signatureBlocks.length > 0 && (
+        <DocumentPage
+          htmlContent={documentData.rendered_content}
+          overlay={
+            signatureBlocks.length > 0 ? (
               <SigningOverlay
                 signatureBlocks={signatureBlocks}
                 signatureStatuses={documentData.signature_statuses}
                 contentAreaRef={contentAreaRef}
                 onBlockClick={handleBlockClick}
               />
-            )}
-          </div>
-        </div>
+            ) : null
+          }
+        />
       </div>
 
       {/* Finish Button (when all blocks are signed) */}

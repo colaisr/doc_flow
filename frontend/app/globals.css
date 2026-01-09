@@ -259,6 +259,30 @@ div.react-joyride__beacon__outer,
   max-width: none;
 }
 
+/* Preserve blank lines and spacing in rendered documents */
+/* Empty paragraphs (blank lines) should be visible */
+/* Use reduced margins to minimize visual shift while still preserving blank lines */
+.prose p:empty,
+.ProseMirror p:empty {
+  display: block;
+  min-height: 1.5em; /* Preserve empty paragraphs as blank lines */
+  /* Reduced margins to minimize shift - still visible but less spacing */
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.prose p:empty::before,
+.ProseMirror p:empty::before {
+  content: "\200B"; /* Zero-width space to prevent collapse */
+}
+
+/* Ensure line breaks are preserved */
+.prose br {
+  display: block;
+  margin: 0.35em 0;
+  line-height: 1.2em;
+}
+
 .prose h1,
 .prose h2,
 .prose h3,
@@ -283,9 +307,24 @@ div.react-joyride__beacon__outer,
   font-size: 1.5em;
 }
 
-.prose p {
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
+/* Reduce paragraph spacing to better match editor overlay coordinates */
+.prose p,
+.ProseMirror p {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+/* First paragraph should have no top margin to match editor */
+.prose p:first-child,
+.ProseMirror p:first-child {
+  margin-top: 0 !important;
+}
+
+/* Ensure first element in prose has no top margin */
+.prose > :first-child,
+.ProseMirror > :first-child {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
 }
 
 .prose ul,
