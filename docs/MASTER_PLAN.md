@@ -1,7 +1,7 @@
 # MASTER PLAN - CRM + Document Signing MVP
 
 **Last Updated:** January 2026  
-**Status:** Phase 1 & 2 Complete, Phase 3 In Progress (3.1-3.4 Complete)
+**Status:** Phase 1 & 2 Complete, Phase 3 In Progress (3.1-3.8 Complete, 3.9 Pending)
 
 ---
 
@@ -920,6 +920,15 @@ A web-based MVP combining CRM functionality with document generation and electro
 6. Generate rendered HTML and document title
 7. Create Document record with `status = 'draft'`
 
+**Document Creation from Lead Page:**
+- "צור מסמך חדש" (Create New Document) button on Lead Details page
+- Opens `CreateDocumentModal` component
+- Modal displays list of available templates for organization
+- User selects template
+- Document is generated with merged lead data
+- Automatic redirect to document view page after creation
+- Documents list on lead page refreshes automatically
+
 **Response:**
 ```json
 {
@@ -957,14 +966,17 @@ A web-based MVP combining CRM functionality with document generation and electro
 ### 9.1 Signing Flow
 
 #### Typical Flow:
-1. Document generated from template
+1. Document generated from template (via Lead Details page or API)
 2. User creates signing link for client: `POST /api/documents/{id}/signing-links`
-3. Client receives public link: `GET /api/public/sign/{token}` (TBD)
-4. Client signs document: `POST /api/public/sign/{token}/sign` (TBD)
+3. Client receives public link: `GET /api/public/sign/{token}`
+4. Client signs document: `POST /api/public/sign/{token}/sign`
 5. Document status updates: `'signed_by_client'`
-6. Internal user signs: `POST /api/documents/{id}/sign` (authenticated) (TBD)
-7. Document status updates: `'completed'`
-8. Lead stage may auto-advance (if configured)
+6. Lead stage auto-advances to "חתום על ידי לקוח" (order 4)
+7. Internal user signs: `POST /api/documents/{id}/sign` (authenticated)
+8. Document status updates: `'signed_by_internal'` or `'completed'`
+9. Lead stage auto-advances accordingly (to order 5, then 6 if completed)
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -1003,11 +1015,19 @@ A web-based MVP combining CRM functionality with document generation and electro
 ```json
 {
   "signer_type": "internal",
+  "signer_name": "John Doe",
   "signature_data": "data:image/png;base64,iVBORw0KG..."  // Base64 signature image
 }
 ```
 
-**Status:** ⏳ To Be Implemented
+**Process:**
+1. Validates user authentication
+2. Creates DocumentSignature record with signer_user_id
+3. Updates document status to `'signed_by_internal'` or `'completed'`
+4. Auto-advances lead stage to "חתום על ידי פנימי" (order 5) or "הושלם" (order 6)
+5. Creates LeadStageHistory entry
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -1016,11 +1036,22 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Endpoint:** `GET /api/public/sign/{token}`
 
 **Response:**
-- Document details (read-only)
-- Signing interface
-- Signature canvas/input
+- Document details (title, rendered_content, signature_blocks)
+- Signer type information
+- Expiration and usage status
+- Read-only document view with signature blocks positioned
 
-**Status:** ⏳ To Be Implemented
+**Frontend Route:** `/public/sign/[token]`
+
+**Features:**
+- Token validation (checks expiration, usage status)
+- Display rendered document with merged lead data
+- Signature canvas for capturing handwritten signature
+- Form fields: signer name, email (pre-filled from link if available)
+- Submit signature button
+- Success confirmation after signing
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -1033,35 +1064,58 @@ A web-based MVP combining CRM functionality with document generation and electro
 {
   "signer_name": "John Doe",
   "signer_email": "john@example.com",
-  "signature_data": "data:image/png;base64,iVBORw0KG..."
+  "signature_data": "data:image/png;base64,iVBORw0KG...",
+  "signer_type": "client"
 }
 ```
 
 **Process:**
 1. Validate token and expiration
 2. Check if link already used
-3. Create DocumentSignature record
-4. Update document status
-5. Mark signing link as used
-6. Optionally trigger stage advancement
+3. Verify signer_type matches link's intended type
+4. Create DocumentSignature record with signing_token
+5. Update document status to `'signed_by_client'`
+6. Auto-advance lead stage to "חתום על ידי לקוח" (order 4)
+7. Mark signing link as used
+8. Create LeadStageHistory entry
+9. Log IP address and user agent
 
-**Status:** ⏳ To Be Implemented
+**Response:**
+```json
+{
+  "message": "Signature submitted successfully",
+  "document_status": "signed_by_client",
+  "signature_id": 123
+}
+```
+
+**Status:** ✅ Implemented
 
 ---
 
 ### 9.5 Signature Storage
 
 **Signature Data Format:**
-- Base64-encoded PNG image
-- Or JSON with vector data (for future vector signature support)
+- Base64-encoded PNG image (`data:image/png;base64,...` format)
+- Stored in `DocumentSignature.signature_data` field as Text
+- Captured using `react-signature-canvas` component
+- Supports both mouse and touch input
 
 **Audit Trail:**
-- Timestamp
-- IP address
-- User agent
-- Signer identity (name, email, or user_id)
+- Timestamp (`signed_at`)
+- IP address (`ip_address`)
+- User agent (`user_agent`)
+- Signer identity (`signer_name`, `signer_email`, `signer_user_id`)
+- Signing token (for public client signatures)
 
-**Status:** ⏳ To Be Implemented
+**Signature Capture Component:**
+- React component with signature canvas
+- Clear button
+- Status indicator (signature saved confirmation)
+- RTL support with Hebrew labels
+- Converts to Base64 PNG on submit
+
+**Status:** ✅ Implemented
 
 ---
 
@@ -1328,7 +1382,16 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Stage change dropdown with confirmation
 - User assignment dropdown
 - Delete lead button with confirmation
-- Related documents section (placeholder for Phase 2/3)
+- Related documents section with list of all documents for the lead
+  - Shows document title, status, created date
+  - "View" button to navigate to document page
+  - "Create New Document" button opens template selection modal
+- Document creation modal (`CreateDocumentModal` component)
+  - Lists all available templates for organization
+  - Template selection with visual feedback
+  - Automatic document generation with merged lead data
+  - Redirects to document view page after creation
+  - Documents list refreshes automatically
 - RTL layout with Hebrew UI
 - Responsive design (mobile and desktop)
 
@@ -1360,14 +1423,54 @@ A web-based MVP combining CRM functionality with document generation and electro
 ---
 
 ### 14.5 Document Pages
-- `/documents/[id]` - Document view page ⏳ To Be Implemented
-- `/documents/[id]/sign` - Internal signing page ⏳ To Be Implemented
+- `/documents/[id]` - Document view page ✅ Implemented
+- `/documents/[id]/sign` - Internal signing page ✅ Implemented
+
+**Document View Page Features:** ✅ Implemented
+- Display rendered document content with merged lead data
+- Show document metadata (title, status, created date, created by)
+- Display signature blocks positioned on document (via overlay)
+- Signature status display (client signed, internal signed, both)
+- List of signing links with status (active, used, expired)
+- "Send Signing Link" button with modal for creating new signing links
+- "Sign Document" button for internal signing (if not already signed internally)
+- Delete document button with confirmation
+- Link to related lead
+- Link to template source
+- Success/error notifications
+- RTL layout with Hebrew UI
+- Responsive design
+
+**Internal Signing Page Features:** ✅ Implemented
+- Display document content
+- Signature canvas component for capturing signature
+- Form fields: signer name (pre-filled from user), signature capture
+- Submit signature button
+- Automatic document status update
+- Automatic lead stage advancement
+- Success confirmation after signing
+- Redirect to document view page after successful signing
 
 ---
 
 ### 14.6 Public Pages
-- `/public/sign/[token]` - Public signing page ⏳ To Be Implemented
+- `/public/sign/[token]` - Public signing page ✅ Implemented
 - `/public/form/[token]` - Public form submission page ⏳ To Be Implemented
+
+**Public Signing Page Features:** ✅ Implemented
+- Token-based access (no authentication required)
+- Token validation (checks expiration, usage status)
+- Display document title and rendered content
+- Signature blocks positioned on document (via overlay)
+- Signature canvas component for capturing handwritten signature
+- Form fields: signer name (required), signer email (pre-filled if available from link)
+- Submit signature button
+- Loading states during submission
+- Error handling (expired link, already used, invalid token)
+- Success confirmation page after signing
+- Automatic document status update to 'signed_by_client'
+- Automatic lead stage advancement to "חתום על ידי לקוח"
+- RTL layout with Hebrew UI
 
 ---
 
@@ -1476,14 +1579,30 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.3  
+**Document Version:** 1.4  
 **Last Updated:** January 2026  
 **Latest Changes:**
-- Phase 3.1: Added Document, DocumentSignature, and SigningLink database models with full relationships
-- Phase 3.2: Implemented document generation service with merge field replacement, HTML escaping, RTL preservation
-- Phase 3.3: Created documents API endpoints (POST/GET/DELETE /api/documents) with organization scoping
-- Phase 3.4: Implemented signing link system with UUID token generation, expiration, validation, and URL generation
-- Added signing link endpoints: POST/GET /api/documents/{id}/signing-links, GET /api/documents/signing-links/{token}/validate
-- Document status auto-updates to 'sent' when signing link is created
+- Phase 3.5: Built signature capture component (`SignatureCanvas`) with mouse/touch support, Base64 PNG conversion
+- Phase 3.6: Created signing API endpoints (public and internal)
+  - `POST /api/public/sign/{token}/sign` - Public client signature submission
+  - `POST /api/documents/{id}/sign` - Internal authenticated signature submission
+  - Document status auto-updates based on signer type
+  - Lead stage auto-advances on signature (client → order 4, internal → order 5, completed → order 6)
+- Phase 3.7: Built document view page (`/documents/[id]`)
+  - Displays rendered document content with merged lead data
+  - Shows signature status and signing links
+  - "Send Signing Link" modal for creating client signing links
+  - Internal signing capability
+- Phase 3.8: Created signing pages (public and internal)
+  - `/public/sign/[token]` - Public signing page with token validation
+  - `/documents/[id]/sign` - Internal signing page (authenticated)
+  - Both pages integrate `SignatureCanvas` component
+  - Success/confirmation screens after signing
+- Added document creation workflow from Lead Details page
+  - `CreateDocumentModal` component for template selection
+  - "צור מסמך חדש" button on lead page
+  - Automatic redirect to document page after creation
+  - Documents list integration on lead page
+- Phase 3.1-3.4: Previous phases (Document models, generation service, API endpoints, signing links)
 - Phase 2 Complete: Google Docs-style template editor with multi-page A4 layout, merge fields, signature overlay, RTL support
 
