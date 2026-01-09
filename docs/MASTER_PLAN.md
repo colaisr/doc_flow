@@ -275,14 +275,15 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `id` (Integer, Primary Key)
 - `organization_id` (Integer, Foreign Key) - **Required**
 - `lead_id` (Integer, Foreign Key) - **Required**
-- `template_id` (Integer, Foreign Key) - Original template
-- `title` (String) - Generated from template name + lead info
-- `rendered_content` (Text) - HTML with merged data (no placeholders) - stored in database
+- `template_id` (Integer, Foreign Key, Optional) - Original template (nullable for uploaded documents)
+- `title` (String) - Generated from template name + lead info, or filename for uploaded documents
+- `rendered_content` (Text, Optional) - HTML with merged data (no placeholders) - nullable for uploaded PDFs
 - `signature_blocks` (Text, Optional) - JSON string with signature block metadata (copied from template, can be edited)
-- `pdf_file_path` (String, Optional) - Path/URL to signed PDF file (stored after signing)
+- `pdf_file_path` (String, Optional) - Path/URL to PDF file (for uploaded documents or signed PDFs)
 - `signing_url` (String, Optional) - Public signing URL (stored when signing link is created)
 - `contract_type` (String, Optional) - `'buyer'`, `'seller'`, or `'lawyer'` - Determines which stage this contract is for
-- `status` (String) - `'draft'` (being worked on), `'ready'` (ready to send), `'sent'` (link sent), `'signed'` (moved to Documents tab)
+- `document_type` (String, Optional) - Document type ID for uploaded documents (e.g., 'lawyer_approved_buyer_contract', 'lawyer_approved_seller_contract')
+- `status` (String) - `'draft'` (being worked on), `'ready'` (ready to send), `'sent'` (link sent), `'signed'` (moved to Documents tab), `'uploaded'` (uploaded PDF)
 - `created_by_user_id` (Integer, Foreign Key)
 - `created_at` (DateTime)
 - `updated_at` (DateTime)
@@ -1579,6 +1580,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 - **Contract Management Tabs:**
   - "חוזים לחתימה" (Contracts to Sign) tab - shows contracts with status: draft, ready, or sent
   - "מסמכים חתומים" (Signed Documents) tab - shows contracts with status: signed
+  - "מסמכי לקוח" (Buyer Documents) tab - shows uploaded documents (status: uploaded) with document type badges
   - Each contract card shows:
     - Contract type badge (Buyer/Seller/Lawyer)
     - Status badge (Draft/Ready for Sending/Sent)
