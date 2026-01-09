@@ -4,14 +4,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getLead, deleteLead, type LeadDetail } from '@/lib/api/leads'
-import { listDocuments, type Document } from '@/lib/api/documents'
+import { listDocuments, deleteDocument, type Document } from '@/lib/api/documents'
 import { LEAD_FIELD_SECTIONS } from '@/lib/leadFields'
 import EditableField from '@/components/EditableField'
 import StageTimeline from '@/components/StageTimeline'
 import StageChangeDropdown from '@/components/StageChangeDropdown'
 import UserAssignmentDropdown from '@/components/UserAssignmentDropdown'
 import CollapsibleSection from '@/components/CollapsibleSection'
-import { FileText, Eye, Plus, Copy, ExternalLink, Send } from 'lucide-react'
+import { FileText, Eye, Plus, Copy, ExternalLink, Send, Trash2, MessageCircle, Phone } from 'lucide-react'
 import CreateDocumentModal from '@/components/CreateDocumentModal'
 import { createSigningLink } from '@/lib/api/documents'
 
@@ -28,6 +28,8 @@ export default function LeadDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteDocumentConfirm, setShowDeleteDocumentConfirm] = useState<number | null>(null)
+  const [deletingDocument, setDeletingDocument] = useState(false)
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false)
   const [documentsTab, setDocumentsTab] = useState<'contracts' | 'signed'>('contracts')
   const [creatingLinks, setCreatingLinks] = useState<Record<number, boolean>>({})
@@ -129,6 +131,25 @@ export default function LeadDetailsPage() {
     }
   }
 
+  async function handleDeleteDocument(documentId: number) {
+    setDeletingDocument(true)
+    setError(null)
+    try {
+      await deleteDocument(documentId)
+      // Refresh documents list
+      if (leadId) {
+        const response = await listDocuments({ lead_id: leadId })
+        setDocuments(response.items)
+      }
+      setShowDeleteDocumentConfirm(null)
+    } catch (err: any) {
+      setError(err.message || 'שגיאה במחיקת החוזה')
+      console.error('Failed to delete document:', err)
+    } finally {
+      setDeletingDocument(false)
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="p-8">
@@ -202,9 +223,35 @@ export default function LeadDetailsPage() {
                 </svg>
               </button>
               <div className="flex-1">
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                  {lead.full_name || 'ליד ללא שם'}
-                </h1>
+                <div className="flex items-center gap-3 mb-4">
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    {lead.full_name || 'ליד ללא שם'}
+                  </h1>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        // TODO: Implement WhatsApp sending
+                        console.log('Send WhatsApp clicked')
+                      }}
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                      title="שלח הודעה בוואטסאפ"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>שלח וואטסאפ</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        // TODO: Implement phone call
+                        console.log('Call Customer clicked')
+                      }}
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                      title="התקשר ללקוח"
+                    >
+                      <Phone className="w-4 h-4" />
+                      <span>התקשר ללקוח</span>
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
                   <StageChangeDropdown
                     currentStageId={lead.stage_id}
@@ -243,7 +290,7 @@ export default function LeadDetailsPage() {
           </div>
         </div>
 
-        {/* Delete Confirmation Dialog */}
+        {/* Delete Lead Confirmation Dialog */}
         {showDeleteConfirm && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
@@ -280,6 +327,57 @@ export default function LeadDetailsPage() {
             </div>
           </div>
         )}
+
+        {/* Delete Document Confirmation Dialog */}
+        {showDeleteDocumentConfirm !== null && (() => {
+          const docToDelete = documents.find(d => d.id === showDeleteDocumentConfirm)
+          return docToDelete ? (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="flex min-h-full items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowDeleteDocumentConfirm(null)} />
+                <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">מחיקת חוזה</h3>
+                  <p className="text-gray-700 mb-6">
+                    האם אתה בטוח שברצונך למחוק את החוזה <strong>{docToDelete.title}</strong>?
+                    {docToDelete.status === 'signed' && (
+                      <>
+                        <br />
+                        <span className="text-red-600 font-medium">שימו לב: זהו חוזה חתום. פעולה זו תמחק את החוזה לצמיתות.</span>
+                      </>
+                    )}
+                    <br />
+                    <br />
+                    פעולה זו לא ניתנת לביטול.
+                  </p>
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+                      {error}
+                    </div>
+                  )}
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => {
+                        setShowDeleteDocumentConfirm(null)
+                        setError(null)
+                      }}
+                      disabled={deletingDocument}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ביטול
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDocument(showDeleteDocumentConfirm)}
+                      disabled={deletingDocument}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deletingDocument ? 'מוחק...' : 'מחק'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null
+        })()}
 
         {/* Stage Timeline */}
         {lead.stage_history && lead.stage_history.length > 0 && (
@@ -486,6 +584,14 @@ export default function LeadDetailsPage() {
                               ערוך
                             </button>
                           )}
+                          <button
+                            onClick={() => setShowDeleteDocumentConfirm(doc.id)}
+                            className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="מחק חוזה"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            מחק
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -535,23 +641,33 @@ export default function LeadDetailsPage() {
                             </div>
                           </div>
                         </div>
-                        {doc.status === 'signed' ? (
+                        <div className="flex items-center gap-2">
+                          {doc.status === 'signed' ? (
+                            <button
+                              onClick={() => router.push(`/documents/${doc.id}/view`)}
+                              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                              הצג
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => router.push(`/documents/${doc.id}/edit`)}
+                              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                              ערוך
+                            </button>
+                          )}
                           <button
-                            onClick={() => router.push(`/documents/${doc.id}/view`)}
-                            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            onClick={() => setShowDeleteDocumentConfirm(doc.id)}
+                            className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="מחק חוזה"
                           >
-                            <Eye className="w-4 h-4" />
-                            הצג
+                            <Trash2 className="w-4 h-4" />
+                            מחק
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => router.push(`/documents/${doc.id}/edit`)}
-                            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                            ערוך
-                          </button>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -604,6 +720,7 @@ export default function LeadDetailsPage() {
           isOpen={showCreateDocumentModal}
           onClose={() => setShowCreateDocumentModal(false)}
           leadId={leadId}
+          existingDocuments={documents}
           onDocumentCreated={(documentId) => {
             // Refresh documents list
             if (leadId) {

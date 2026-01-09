@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react'
 import { X, FileText, Loader2 } from 'lucide-react'
 import { fetchTemplates, type Template } from '@/lib/api/templates'
-import { createDocument } from '@/lib/api/documents'
+import { createDocument, type Document } from '@/lib/api/documents'
 import { useOrganizationContext } from '@/contexts/OrganizationContext'
 
 interface CreateDocumentModalProps {
   isOpen: boolean
   onClose: () => void
   leadId: number
+  existingDocuments?: Document[] // Documents that already exist for this lead
   onDocumentCreated: (documentId: number) => void
 }
 
@@ -17,6 +18,7 @@ export default function CreateDocumentModal({
   isOpen,
   onClose,
   leadId,
+  existingDocuments = [],
   onDocumentCreated,
 }: CreateDocumentModalProps) {
   const { currentOrganizationId } = useOrganizationContext()
@@ -26,6 +28,33 @@ export default function CreateDocumentModal({
   const [error, setError] = useState<string | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const [contractType, setContractType] = useState<'buyer' | 'seller' | 'lawyer' | null>(null)
+
+  // Determine which contract types already exist
+  const existingContractTypes = new Set(
+    existingDocuments
+      .filter(doc => doc.contract_type)
+      .map(doc => doc.contract_type!)
+  )
+  
+  const isBuyerTaken = existingContractTypes.has('buyer')
+  const isSellerTaken = existingContractTypes.has('seller')
+  const isLawyerTaken = existingContractTypes.has('lawyer')
+
+  // Reset contract type if it becomes invalid (shouldn't happen, but safety check)
+  useEffect(() => {
+    if (contractType && existingContractTypes.has(contractType)) {
+      setContractType(null)
+    }
+  }, [contractType, existingContractTypes])
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setContractType(null)
+      setSelectedTemplateId(null)
+      setError(null)
+    }
+  }, [isOpen])
 
   // Fetch templates when modal opens
   useEffect(() => {
@@ -121,6 +150,12 @@ export default function CreateDocumentModal({
                 <p className="text-gray-600 text-lg mb-2">אין תבניות זמינות</p>
                 <p className="text-gray-500 text-sm">צור תבנית חדשה לפני יצירת מסמך</p>
               </div>
+            ) : isBuyerTaken && isSellerTaken && isLawyerTaken ? (
+              <div className="text-center py-12">
+                <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 text-lg mb-2">כל סוגי החוזים כבר נוצרו</p>
+                <p className="text-gray-500 text-sm">לא ניתן ליצור חוזה נוסף עבור ליד זה</p>
+              </div>
             ) : (
               <div className="space-y-6">
                 {/* Contract Type Selection */}
@@ -132,52 +167,105 @@ export default function CreateDocumentModal({
                     <button
                       type="button"
                       onClick={() => {
-                        setContractType('buyer')
-                        setError(null)
+                        if (!isBuyerTaken) {
+                          setContractType('buyer')
+                          setError(null)
+                        }
                       }}
-                      disabled={creating}
-                      className={`p-4 border-2 rounded-lg text-center transition-all ${
+                      disabled={creating || isBuyerTaken}
+                      title={isBuyerTaken ? 'חוזה לקוח כבר קיים עבור ליד זה' : undefined}
+                      className={`p-4 border-2 rounded-lg text-center transition-all relative ${
                         contractType === 'buyer'
                           ? 'border-blue-600 bg-blue-50'
+                          : isBuyerTaken
+                          ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <div className="font-semibold text-gray-900 mb-1">חוזה לקוח</div>
-                      <div className="text-xs text-gray-500">Buyer Contract</div>
+                      <div className={`font-semibold mb-1 ${isBuyerTaken ? 'text-gray-500' : 'text-gray-900'}`}>
+                        חוזה לקוח
+                      </div>
+                      <div className={`text-xs ${isBuyerTaken ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Buyer Contract
+                      </div>
+                      {isBuyerTaken && (
+                        <div className="absolute top-2 left-2">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                        setContractType('seller')
-                        setError(null)
+                        if (!isSellerTaken) {
+                          setContractType('seller')
+                          setError(null)
+                        }
                       }}
-                      disabled={creating}
-                      className={`p-4 border-2 rounded-lg text-center transition-all ${
+                      disabled={creating || isSellerTaken}
+                      title={isSellerTaken ? 'חוזה מוכר כבר קיים עבור ליד זה' : undefined}
+                      className={`p-4 border-2 rounded-lg text-center transition-all relative ${
                         contractType === 'seller'
                           ? 'border-blue-600 bg-blue-50'
+                          : isSellerTaken
+                          ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <div className="font-semibold text-gray-900 mb-1">חוזה מוכר</div>
-                      <div className="text-xs text-gray-500">Seller Contract</div>
+                      <div className={`font-semibold mb-1 ${isSellerTaken ? 'text-gray-500' : 'text-gray-900'}`}>
+                        חוזה מוכר
+                      </div>
+                      <div className={`text-xs ${isSellerTaken ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Seller Contract
+                      </div>
+                      {isSellerTaken && (
+                        <div className="absolute top-2 left-2">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                        setContractType('lawyer')
-                        setError(null)
+                        if (!isLawyerTaken) {
+                          setContractType('lawyer')
+                          setError(null)
+                        }
                       }}
-                      disabled={creating}
-                      className={`p-4 border-2 rounded-lg text-center transition-all ${
+                      disabled={creating || isLawyerTaken}
+                      title={isLawyerTaken ? 'חוזה עורך דין כבר קיים עבור ליד זה' : undefined}
+                      className={`p-4 border-2 rounded-lg text-center transition-all relative ${
                         contractType === 'lawyer'
                           ? 'border-blue-600 bg-blue-50'
+                          : isLawyerTaken
+                          ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <div className="font-semibold text-gray-900 mb-1">חוזה עורך דין</div>
-                      <div className="text-xs text-gray-500">Lawyer Contract</div>
+                      <div className={`font-semibold mb-1 ${isLawyerTaken ? 'text-gray-500' : 'text-gray-900'}`}>
+                        חוזה עורך דין
+                      </div>
+                      <div className={`text-xs ${isLawyerTaken ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Lawyer Contract
+                      </div>
+                      {isLawyerTaken && (
+                        <div className="absolute top-2 left-2">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
                     </button>
                   </div>
+                  {(isBuyerTaken || isSellerTaken || isLawyerTaken) && (
+                    <p className="mt-2 text-sm text-gray-500">
+                      חוזים שכבר קיימים אינם זמינים לבחירה
+                    </p>
+                  )}
                 </div>
 
                 {/* Template Selection */}
@@ -234,7 +322,7 @@ export default function CreateDocumentModal({
             </button>
             <button
               onClick={handleCreateDocument}
-              disabled={creating || !selectedTemplateId || !contractType || templates.length === 0}
+              disabled={creating || !selectedTemplateId || !contractType || templates.length === 0 || (isBuyerTaken && isSellerTaken && isLawyerTaken)}
               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {creating ? (
