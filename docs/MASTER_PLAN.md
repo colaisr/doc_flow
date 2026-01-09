@@ -898,6 +898,17 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Stored as JSON with absolute coordinates (x, y, width, height)
 - Overlay system - blocks appear on top of document content
 
+**PDF Upload:**
+- "Upload PDF" button in toolbar
+- Converts PDF pages to images using `pdfjs-dist`
+- Processes all PDF pages automatically
+- Each PDF page inserted as a full-page image (794×1123px, A4 dimensions)
+- Images fill entire page area with no margins or padding
+- Pages inserted sequentially, one per A4 page
+- PDF images marked with `data-pdf-page` attribute for special styling
+- Can add signature blocks on top of PDF pages
+- PDF pages can be edited like regular document content
+
 **Editor UI:**
 - Full-screen editing mode (sidebar/topbar hidden)
 - Page-based view with shadows (like Google Docs)
@@ -1549,6 +1560,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Rich text editing with comprehensive toolbar
 - Merge fields panel for inserting lead data placeholders
 - Signature block placement and positioning
+- PDF upload: Upload PDF files, converts all pages to images, inserts one per A4 page
 - Auto-save indication (unsaved changes warning)
 - Template name editing inline
 - Save/Cancel buttons
@@ -1568,6 +1580,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Full-page editing mode (sidebar/topbar hidden)
 - Edits `rendered_content` (already merged with lead data, can be fully reworked)
 - Edits signature blocks independently from template
+- PDF upload: Upload PDF files, converts all pages to images, inserts one per A4 page
 - Shows contract type badge (Buyer/Seller/Lawyer) and status badge in header
 - Editable document title (click to edit)
 - "Save" button to save changes (keeps status as `'draft'`)
@@ -1744,9 +1757,23 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.6  
+**Document Version:** 1.7  
 **Last Updated:** January 2026  
 **Latest Changes:**
+- **PDF Upload Feature:**
+  - Added "Upload PDF" button to editor toolbar (templates and documents)
+  - Uses `pdfjs-dist` library (v3.11.174) for PDF processing
+  - Processes all PDF pages automatically (no page limit)
+  - Converts each PDF page to a high-quality image
+  - Inserts images sequentially, one per A4 page (794×1123px)
+  - PDF images fill entire page area with no margins or padding
+  - Images marked with `data-pdf-page` attribute for special CSS styling
+  - Can add signature blocks on top of PDF pages for signing
+  - PDF pages can be edited like regular document content
+  - Webpack configuration added to handle `pdfjs-dist` dependencies
+  - Dynamic import prevents SSR issues
+  - Perfect alignment: PDF pages start at top-left of A4 page with no offset
+
 - **Per-Block Signing System (DocuSign/SignNow Style):**
   - Added `signature_block_id` to DocumentSignature model (migration)
   - Multiple signatures per document (one per signature block)
