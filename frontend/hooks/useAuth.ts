@@ -52,10 +52,11 @@ export function useAuth() {
   
   // Only check auth on protected routes
   // Wait for pathname to be available before deciding
-  // Check if pathname matches any public route or starts with /rags/public
+  // Check if pathname matches any public route or starts with /rags/public or /public/sign
   const isPublicRoute = pathname ? (
     PUBLIC_ROUTES.includes(pathname) || 
-    pathname.startsWith('/rags/public/')
+    pathname.startsWith('/rags/public/') ||
+    pathname.startsWith('/public/sign/')
   ) : false
   const shouldCheckAuth = pathname !== null && !isPublicRoute
 

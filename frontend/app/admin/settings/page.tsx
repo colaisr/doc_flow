@@ -9,6 +9,40 @@ import apiClient from '@/lib/api'
 import axios from 'axios'
 // Subscription/Pricing/Provider functionality removed for CRM
 
+// Stub types and functions for removed functionality
+type ProviderCredential = any
+type UpdateProviderCredentialRequest = any
+type ModelPricing = any
+type UpdatePricingRequest = any
+
+async function fetchProviderCredentials(): Promise<any[]> {
+  return []
+}
+
+async function updateProviderCredential(provider: string, updates: UpdateProviderCredentialRequest): Promise<any> {
+  return {}
+}
+
+async function getProviderApiKey(provider: string): Promise<{ api_key: string }> {
+  return { api_key: '' }
+}
+
+async function fetchModelPricing(): Promise<ModelPricing[]> {
+  return []
+}
+
+async function fetchPricing(): Promise<ModelPricing[]> {
+  return []
+}
+
+async function fetchUserSubscription(userId: number): Promise<any> {
+  return null
+}
+
+async function updateModelPricing(modelId: number, updates: UpdatePricingRequest): Promise<any> {
+  return {}
+}
+
 interface UserListItem {
   id: number
   email: string
@@ -325,36 +359,16 @@ function UserCard({
   router,
   queryClient,
 }: UserCardProps) {
-  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
-    queryKey: ['admin', 'user', user.id, 'subscription'],
-    queryFn: () => fetchUserSubscription(user.id),
-    enabled: isExpanded,
-    retry: false,
-  })
+  // Subscription functionality removed for CRM MVP
+  const subscription: any = null
+  const subscriptionLoading = false
+  const plans: any[] = []
 
-
-  const { data: plans = [] } = useQuery({
-    queryKey: ['admin', 'subscription-plans'],
-    queryFn: fetchSubscriptionPlans,
-    enabled: isExpanded,
-  })
-
-  const updateSubscriptionMutation = useMutation({
-    mutationFn: (updates: any) => updateUserSubscription(user.id, updates),
-    onSuccess: async (data) => {
-      // Update the cache directly with the returned data first
-      queryClient.setQueryData(['admin', 'user', user.id, 'subscription'], data)
-      // Then invalidate and refetch to ensure consistency
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'user', user.id, 'subscription'] })
-      await queryClient.refetchQueries({ 
-        queryKey: ['admin', 'user', user.id, 'subscription'],
-        exact: true 
-      })
-    },
-    onError: (error: any) => {
-      alert(error.response?.data?.detail || 'Ошибка при обновлении подписки')
-    },
-  })
+  const updateSubscriptionMutation = {
+    mutate: () => {},
+    isLoading: false,
+    isPending: false,
+  } as any
 
   const [editingSubscriptionTokens, setEditingSubscriptionTokens] = useState(false)
   const [editingBalanceTokens, setEditingBalanceTokens] = useState(false)
@@ -363,13 +377,14 @@ function UserCard({
   const [addTokensAmount, setAddTokensAmount] = useState('')
   const [newPlanId, setNewPlanId] = useState<number | null>(null)
 
-  useEffect(() => {
-    if (subscription) {
-      setNewSubscriptionTokens(subscription.tokens_used_this_period.toString())
-      setNewBalanceTokens(subscription.token_balance.toString())
-      setNewPlanId(subscription.plan_id)
-    }
-  }, [subscription])
+  // Subscription functionality removed for CRM MVP
+  // useEffect(() => {
+  //   if (subscription) {
+  //     setNewSubscriptionTokens(subscription.tokens_used_this_period.toString())
+  //     setNewBalanceTokens(subscription.token_balance.toString())
+  //     setNewPlanId(subscription.plan_id)
+  //   }
+  // }, [subscription])
 
   const handleSaveSubscriptionTokens = () => {
     const value = parseInt(newSubscriptionTokens)
@@ -402,8 +417,9 @@ function UserCard({
   }
 
   const handleChangePlan = () => {
-    if (!newPlanId || newPlanId === subscription?.plan_id) return
-    updateSubscriptionMutation.mutate({ plan_id: newPlanId })
+    // Subscription functionality removed for CRM MVP
+    // if (!newPlanId || newPlanId === subscription?.plan_id) return
+    // updateSubscriptionMutation.mutate({ plan_id: newPlanId })
   }
 
   const handleResetPeriod = () => {

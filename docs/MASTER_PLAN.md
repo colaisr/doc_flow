@@ -186,14 +186,18 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `created_at` (DateTime)
 - `updated_at` (DateTime)
 
-**Default Stages (in Hebrew):**
-1. ליד חדש (New Lead) - order: 1
-2. מסמכים מוכנים (Documents Prepared) - order: 2
-3. לינק חתימה נשלח (Signing Link Sent) - order: 3
-4. חתום על ידי לקוח (Signed by Client) - order: 4
-5. חתום על ידי פנימי (Signed by Internal) - order: 5
-6. הושלם (Completed) - order: 6
-7. בארכיון (Archived) - order: 7
+**Default Stages (in Hebrew) - Contract Workflow:**
+1. ליד חדש (New Lead) - order: 1 - Default stage when lead is created
+2. חוזה לקוח מוכן (Buyer Contract Ready) - order: 2 - When buyer contract is marked as ready
+3. חתום על ידי לקוח (Buyer Signed) - order: 3 - When buyer signs the contract
+4. חוזה מוכר מוכן (Seller Contract Ready) - order: 4 - When seller contract is marked as ready
+5. חתום על ידי מוכר (Seller Signed) - order: 5 - When seller signs the contract
+6. חוזה עורך דין מוכן (Lawyer Contract Ready) - order: 6 - When lawyer contract is marked as ready
+7. חתום על ידי עורך דין (Lawyer Signed) - order: 7 - When lawyer signs the contract (final stage)
+
+**Note:** Stages advance automatically based on contract actions:
+- Marking contract as "ready" → advances to corresponding "Ready" stage (order 2, 4, or 6)
+- Client signing contract → advances to corresponding "Signed" stage (order 3, 5, or 7)
 
 **Note:** Stages are global (not organization-specific). All organizations use the same stages.
 
@@ -270,9 +274,11 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `template_id` (Integer, Foreign Key) - Original template
 - `title` (String) - Generated from template name + lead info
 - `rendered_content` (Text) - HTML with merged data (no placeholders) - stored in database
+- `signature_blocks` (Text, Optional) - JSON string with signature block metadata (copied from template, can be edited)
 - `pdf_file_path` (String, Optional) - Path/URL to signed PDF file (stored after signing)
 - `signing_url` (String, Optional) - Public signing URL (stored when signing link is created)
-- `status` (String) - `'draft'`, `'sent'`, `'signed_by_client'`, `'signed_by_internal'`, `'completed'`, `'expired'`
+- `contract_type` (String, Optional) - `'buyer'`, `'seller'`, or `'lawyer'` - Determines which stage this contract is for
+- `status` (String) - `'draft'` (being worked on), `'ready'` (ready to send), `'sent'` (link sent), `'signed'` (moved to Documents tab)
 - `created_by_user_id` (Integer, Foreign Key)
 - `created_at` (DateTime)
 - `updated_at` (DateTime)
@@ -921,12 +927,15 @@ A web-based MVP combining CRM functionality with document generation and electro
 7. Create Document record with `status = 'draft'`
 
 **Document Creation from Lead Page:**
-- "צור מסמך חדש" (Create New Document) button on Lead Details page
+- "צור חוזה חדש" (Create New Contract) button on Lead Details page
 - Opens `CreateDocumentModal` component
-- Modal displays list of available templates for organization
-- User selects template
-- Document is generated with merged lead data
-- Automatic redirect to document view page after creation
+- Modal first asks for contract type selection: Buyer, Seller, or Lawyer
+- Then displays list of available templates for organization
+- User selects contract type and template
+- Document is generated with merged lead data and `contract_type` set
+- Initial status: `'draft'` (can be edited)
+- Signature blocks copied from template to document
+- Automatic redirect to unified Google Docs-style editor (`/documents/[id]/edit`) after creation
 - Documents list on lead page refreshes automatically
 
 **Response:**
@@ -965,16 +974,42 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ### 9.1 Signing Flow
 
-#### Typical Flow:
-1. Document generated from template (via Lead Details page or API)
-2. User creates signing link for client: `POST /api/documents/{id}/signing-links`
-3. Client receives public link: `GET /api/public/sign/{token}`
-4. Client signs document: `POST /api/public/sign/{token}/sign`
-5. Document status updates: `'signed_by_client'`
-6. Lead stage auto-advances to "חתום על ידי לקוח" (order 4)
-7. Internal user signs: `POST /api/documents/{id}/sign` (authenticated)
-8. Document status updates: `'signed_by_internal'` or `'completed'`
-9. Lead stage auto-advances accordingly (to order 5, then 6 if completed)
+#### Contract Workflow:
+1. **Document Creation:** User creates contract from template on Lead Details page
+   - Selects contract type: Buyer, Seller, or Lawyer
+   - Selects template
+   - Document created with `status='draft'`, `contract_type` set, signature blocks copied from template
+   - Redirects to unified editor (`/documents/[id]/edit`)
+
+2. **Contract Editing:** User edits contract in Google Docs-style editor
+   - Can fully rework content and signature blocks
+   - Saves as draft multiple times until ready
+   - Clicks "Mark as Ready" → `status='ready'`, lead stage advances:
+     - Buyer contract → "חוזה לקוח מוכן" (Buyer Contract Ready)
+     - Seller contract → "חוזה מוכר מוכן" (Seller Contract Ready)
+     - Lawyer contract → "חוזה עורך דין מוכן" (Lawyer Contract Ready)
+
+3. **Signing Link Creation:** On Lead Details page, contract card shows signing actions
+   - For ready contracts: "צור קישור" (Create Link) button
+   - Clicking creates signing link and automatically copies to clipboard
+   - `status` updates to `'sent'`
+   - Link can be sent to customer via any method (email, WhatsApp, etc.)
+
+4. **Client Signing:** Customer receives public link
+   - Customer opens link: `GET /api/public/sign/{token}`
+   - Views document with signature blocks positioned
+   - Signs document: `POST /api/public/sign/{token}/sign`
+   - Document `status` updates to `'signed'`
+   - Lead stage auto-advances:
+     - Buyer contract → "חתום על ידי לקוח" (Buyer Signed)
+     - Seller contract → "חתום על ידי מוכר" (Seller Signed)
+     - Lawyer contract → "חתום על ידי עורך דין" (Lawyer Signed)
+   - Contract moves to "מסמכים חתומים" (Signed Documents) tab
+
+5. **Contract Management:**
+   - Draft/ready/sent contracts shown in "חוזים לחתימה" (Contracts to Sign) tab
+   - Signed contracts shown in "מסמכים חתומים" (Signed Documents) tab
+   - Signing links accessible directly from contract cards (copy/open buttons)
 
 **Status:** ✅ Implemented
 
@@ -988,21 +1023,36 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Request:**
 ```json
 {
-  "signer_type": "client",
-  "intended_signer_email": "client@example.com",
-  "expires_in_days": 7
+  "intended_signer_email": "client@example.com",  // Optional
+  "expires_in_days": 7  // Optional (None = no expiration)
 }
 ```
+
+**Note:** `signer_type` removed - all public signing links are implicitly 'client' type. The `contract_type` on the document determines which stage to advance to when signed.
+
+**Process:**
+1. Creates signing link with secure UUID token
+2. Generates full signing URL: `{FRONTEND_BASE_URL}/public/sign/{token}`
+3. Stores URL in `Document.signing_url` field
+4. Updates document `status` to `'sent'` (if it was `'ready'`)
+5. Returns signing URL for immediate use
 
 **Response:**
 ```json
 {
   "id": 20,
   "token": "abc123xyz789",
-  "signing_url": "https://app.example.com/sign/abc123xyz789",
-  "expires_at": "2024-12-31T23:59:59Z"
+  "signing_url": "https://app.example.com/public/sign/abc123xyz789",
+  "expires_at": "2024-12-31T23:59:59Z"  // or null if no expiration
 }
 ```
+
+**Frontend Integration:**
+- Contract cards on Lead Details page show signing link actions for ready/sent contracts
+- "העתק קישור" (Copy Link) button - copies URL to clipboard with visual feedback
+- "פתח" (Open) button - opens signing link in new tab
+- "צור קישור" (Create Link) button appears if no link exists yet
+- After creation, link is automatically copied to clipboard
 
 **Status:** ✅ Implemented
 
@@ -1014,18 +1064,22 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Request:**
 ```json
 {
-  "signer_type": "internal",
   "signer_name": "John Doe",
+  "signer_email": "lawyer@example.com",  // Optional
   "signature_data": "data:image/png;base64,iVBORw0KG..."  // Base64 signature image
 }
 ```
 
+**Note:** `signer_type` removed - internal signing is implicit when authenticated user signs. The `contract_type` on document determines stage advancement (lawyer contracts only use internal signing).
+
 **Process:**
 1. Validates user authentication
-2. Creates DocumentSignature record with signer_user_id
-3. Updates document status to `'signed_by_internal'` or `'completed'`
-4. Auto-advances lead stage to "חתום על ידי פנימי" (order 5) or "הושלם" (order 6)
+2. Creates DocumentSignature record with `signer_type='internal'` and `signer_user_id`
+3. Updates document status to `'signed'`
+4. Auto-advances lead stage based on `contract_type`:
+   - Lawyer contract → "חתום על ידי עורך דין" (Lawyer Signed - order 7)
 5. Creates LeadStageHistory entry
+6. Sets `completed_at` timestamp
 
 **Status:** ✅ Implemented
 
@@ -1072,13 +1126,16 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Process:**
 1. Validate token and expiration
 2. Check if link already used
-3. Verify signer_type matches link's intended type
-4. Create DocumentSignature record with signing_token
-5. Update document status to `'signed_by_client'`
-6. Auto-advance lead stage to "חתום על ידי לקוח" (order 4)
-7. Mark signing link as used
-8. Create LeadStageHistory entry
-9. Log IP address and user agent
+3. Create DocumentSignature record with `signer_type='client'` and `signing_token`
+4. Update document status to `'signed'`
+5. Auto-advance lead stage based on document's `contract_type`:
+   - Buyer contract → "חתום על ידי לקוח" (Buyer Signed - order 3)
+   - Seller contract → "חתום על ידי מוכר" (Seller Signed - order 5)
+   - Lawyer contract → "חתום על ידי עורך דין" (Lawyer Signed - order 7)
+6. Mark signing link as used
+7. Create LeadStageHistory entry
+8. Log IP address and user agent
+9. Set `completed_at` timestamp
 
 **Response:**
 ```json
@@ -1378,19 +1435,36 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Full lead data display with all 130+ fields organized in 12 collapsible sections
 - Hebrew field labels for all fields
 - Inline editing for all fields (click to edit, save/cancel)
-- Horizontal stage progression timeline (responsive, shows history)
+- **Enhanced Stage Timeline:**
+  - Shows ALL stages (completed, current, upcoming)
+  - Visual indicators: Green checkmark for completed, blue pulsing dot for current, gray clock for upcoming
+  - "נוכחי" (Current) badge for active stage
+  - "הבא" (Next) badge for upcoming stages
+  - Shows completion date/time and user who changed stage for completed/current stages
+  - Proper RTL layout for Hebrew interface
 - Stage change dropdown with confirmation
 - User assignment dropdown
 - Delete lead button with confirmation
-- Related documents section with list of all documents for the lead
-  - Shows document title, status, created date
-  - "View" button to navigate to document page
-  - "Create New Document" button opens template selection modal
-- Document creation modal (`CreateDocumentModal` component)
-  - Lists all available templates for organization
-  - Template selection with visual feedback
+- **Contract Management Tabs:**
+  - "חוזים לחתימה" (Contracts to Sign) tab - shows contracts with status: draft, ready, or sent
+  - "מסמכים חתומים" (Signed Documents) tab - shows contracts with status: signed
+  - Each contract card shows:
+    - Contract type badge (Buyer/Seller/Lawyer)
+    - Status badge (Draft/Ready for Sending/Sent)
+    - Creation date and template name
+    - **Signing Link Actions (for ready/sent contracts):**
+      - "העתק קישור" (Copy Link) button - copies signing link to clipboard
+      - "פתח" (Open) button - opens signing link in new tab
+      - If no signing link exists, "צור קישור" (Create Link) button appears
+      - Creating a link automatically copies it to clipboard
+    - "ערוך" (Edit) button - opens unified editor
+- **Document Creation Modal** (`CreateDocumentModal` component):
+  - First step: Contract type selection (Buyer/Seller/Lawyer)
+  - Second step: Template selection with visual feedback
   - Automatic document generation with merged lead data
-  - Redirects to document view page after creation
+  - Sets `contract_type` and initial `status='draft'`
+  - Copies signature blocks from template to document
+  - Redirects to unified editor (`/documents/[id]/edit`) after creation
   - Documents list refreshes automatically
 - RTL layout with Hebrew UI
 - Responsive design (mobile and desktop)
@@ -1410,7 +1484,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Hebrew UI with RTL layout
 
 **Template Editor Features:** ✅ Implemented
-- Full-page Google Docs-style editor
+- Full-page Google Docs-style editor (unified with document editor)
 - Rich text editing with comprehensive toolbar
 - Merge fields panel for inserting lead data placeholders
 - Signature block placement and positioning
@@ -1419,27 +1493,30 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Save/Cancel buttons
 - Automatic page breaks (A4 layout)
 - Multi-page document support
+- Clean layout without sidebar/topbar
 
 ---
 
 ### 14.5 Document Pages
-- `/documents/[id]` - Document view page ✅ Implemented
+- `/documents/[id]/edit` - Document editor page (unified with template editor) ✅ Implemented
 - `/documents/[id]/sign` - Internal signing page ✅ Implemented
 
-**Document View Page Features:** ✅ Implemented
-- Display rendered document content with merged lead data
-- Show document metadata (title, status, created date, created by)
-- Display signature blocks positioned on document (via overlay)
-- Signature status display (client signed, internal signed, both)
-- List of signing links with status (active, used, expired)
-- "Send Signing Link" button with modal for creating new signing links
-- "Sign Document" button for internal signing (if not already signed internally)
-- Delete document button with confirmation
-- Link to related lead
-- Link to template source
-- Success/error notifications
-- RTL layout with Hebrew UI
-- Responsive design
+**Document Editor Page Features:** ✅ Implemented
+- **Unified Editor:** Same Google Docs-style editor used for both templates and documents
+- Full-page editing mode (sidebar/topbar hidden)
+- Edits `rendered_content` (already merged with lead data, can be fully reworked)
+- Edits signature blocks independently from template
+- Shows contract type badge (Buyer/Seller/Lawyer) and status badge in header
+- Editable document title (click to edit)
+- "Save" button to save changes (keeps status as `'draft'`)
+- "Mark as Ready" button (for draft contracts) - saves changes, sets status to `'ready'`, and advances lead stage
+- Contract type-specific stage advancement when marked ready:
+  - Buyer contract → advances to "חוזה לקוח מוכן" (Buyer Contract Ready)
+  - Seller contract → advances to "חוזה מוכר מוכן" (Seller Contract Ready)
+  - Lawyer contract → advances to "חוזה עורך דין מוכן" (Lawyer Contract Ready)
+- "Unsaved changes" warning before navigation
+- Redirects to lead page after marking as ready
+- Clean layout without sidebar/topbar (same as template editor)
 
 **Internal Signing Page Features:** ✅ Implemented
 - Display document content
@@ -1579,30 +1656,58 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.4  
+**Document Version:** 1.5  
 **Last Updated:** January 2026  
 **Latest Changes:**
-- Phase 3.5: Built signature capture component (`SignatureCanvas`) with mouse/touch support, Base64 PNG conversion
-- Phase 3.6: Created signing API endpoints (public and internal)
-  - `POST /api/public/sign/{token}/sign` - Public client signature submission
-  - `POST /api/documents/{id}/sign` - Internal authenticated signature submission
-  - Document status auto-updates based on signer type
-  - Lead stage auto-advances on signature (client → order 4, internal → order 5, completed → order 6)
-- Phase 3.7: Built document view page (`/documents/[id]`)
-  - Displays rendered document content with merged lead data
-  - Shows signature status and signing links
-  - "Send Signing Link" modal for creating client signing links
-  - Internal signing capability
-- Phase 3.8: Created signing pages (public and internal)
-  - `/public/sign/[token]` - Public signing page with token validation
-  - `/documents/[id]/sign` - Internal signing page (authenticated)
-  - Both pages integrate `SignatureCanvas` component
-  - Success/confirmation screens after signing
-- Added document creation workflow from Lead Details page
-  - `CreateDocumentModal` component for template selection
-  - "צור מסמך חדש" button on lead page
-  - Automatic redirect to document page after creation
-  - Documents list integration on lead page
-- Phase 3.1-3.4: Previous phases (Document models, generation service, API endpoints, signing links)
-- Phase 2 Complete: Google Docs-style template editor with multi-page A4 layout, merge fields, signature overlay, RTL support
+- **Contract Workflow Implementation:**
+  - Reorganized lead stages to match contract-specific workflow:
+    1. ליד חדש (New Lead) - order: 1
+    2. חוזה לקוח מוכן (Buyer Contract Ready) - order: 2
+    3. חתום על ידי לקוח (Buyer Signed) - order: 3
+    4. חוזה מוכר מוכן (Seller Contract Ready) - order: 4
+    5. חתום על ידי מוכר (Seller Signed) - order: 5
+    6. חוזה עורך דין מוכן (Lawyer Contract Ready) - order: 6
+    7. חתום על ידי עורך דין (Lawyer Signed) - order: 7
+  - Added `contract_type` field to Document model ('buyer', 'seller', 'lawyer')
+  - Updated document statuses: 'draft', 'ready', 'sent', 'signed'
+  - Stage advancement logic fixed to use stage names (instead of orders) to handle duplicates
+
+- **Unified Editor:**
+  - Created single `UnifiedEditor` component for both templates and documents
+  - Template editor (`/templates/[id]/edit`) and document editor (`/documents/[id]/edit`) use same component
+  - Document editor allows full editing of `rendered_content` (already merged with lead data)
+  - Signature blocks can be edited independently from template
+  - "Mark as Ready" button for draft contracts - saves changes, sets status to 'ready', and advances lead stage
+  - Both editors use clean layout without sidebar/topbar
+
+- **Document Management:**
+  - Removed deprecated document view page (`/documents/[id]`)
+  - All document interactions now use unified editor
+  - Contract cards on Lead Details page show signing link actions:
+    - Copy link button (copies to clipboard with feedback)
+    - Open link button (opens in new tab)
+    - Create link button (if no link exists, auto-creates and copies)
+  - Separate tabs: "חוזים לחתימה" (Contracts to Sign) and "מסמכים חתומים" (Signed Documents)
+  - Contract type selection in CreateDocumentModal (Buyer/Seller/Lawyer)
+  - Automatic redirect to editor after document creation
+
+- **Stage Timeline UX Improvements:**
+  - Shows ALL stages (completed, current, upcoming)
+  - Visual indicators: Green checkmark (completed), blue pulsing dot (current), gray clock (upcoming)
+  - "נוכחי" (Current) and "הבא" (Next) badges
+  - Shows completion date/time and user for completed/current stages
+  - Proper RTL layout for Hebrew interface
+
+- **Signing Link Management:**
+  - Signing links displayed directly on contract cards for ready/sent contracts
+  - One-click copy and open functionality
+  - Auto-create link with automatic clipboard copy
+  - Link generation updates document status to 'sent'
+  - Removed all "Internal" signature references (simplified workflow)
+
+- **Previous Phases:**
+  - Phase 3.5: Signature capture component (`SignatureCanvas`)
+  - Phase 3.6: Signing API endpoints (public and internal)
+  - Phase 3.7-3.8: Document and signing pages
+  - Phase 2 Complete: Google Docs-style template editor with multi-page A4 layout, merge fields, signature overlay, RTL support
 

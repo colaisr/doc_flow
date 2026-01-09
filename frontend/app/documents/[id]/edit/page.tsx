@@ -6,13 +6,12 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import UnifiedEditor from '@/components/UnifiedEditor'
 
-export default function TemplateEditPage() {
+export default function DocumentEditPage() {
   const router = useRouter()
   const params = useParams()
   const { isLoading: authLoading, isAuthenticated } = useAuth()
   
   const itemId = params?.id ? (params.id as string) : null
-  const isNew = itemId === 'new'
   
   // Redirect if not authenticated
   useEffect(() => {
@@ -29,5 +28,5 @@ export default function TemplateEditPage() {
     )
   }
 
-  return <UnifiedEditor itemId={itemId} isNew={isNew} isDocumentEdit={false} />
+  return <UnifiedEditor itemId={itemId} isNew={false} isDocumentEdit={true} />
 }

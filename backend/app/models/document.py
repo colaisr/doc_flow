@@ -18,10 +18,12 @@ class Document(Base):
     
     title = Column(String(500), nullable=False)  # Generated from template name + lead info
     rendered_content = Column(Text, nullable=False)  # HTML with merged data (no placeholders)
+    signature_blocks = Column(Text, nullable=True)  # JSON string with signature block metadata (copied from template, can be edited)
     pdf_file_path = Column(String(1000), nullable=True)  # Path/URL to signed PDF file
     signing_url = Column(String(500), nullable=True)  # Public signing URL (stored when signing link is created)
     
-    status = Column(String(50), nullable=False, default='draft')  # 'draft', 'sent', 'signed_by_client', 'signed_by_internal', 'completed', 'expired'
+    contract_type = Column(String(50), nullable=True)  # 'buyer', 'seller', 'lawyer' - determines which stage this contract is for
+    status = Column(String(50), nullable=False, default='draft')  # 'draft' (being worked on), 'ready' (ready to send), 'sent' (link sent), 'signed' (moved to Documents tab)
     
     created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

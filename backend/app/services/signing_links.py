@@ -147,7 +147,7 @@ def get_signing_link_url(base_url: str, token: str) -> str:
     """
     # Remove trailing slash from base_url if present
     base_url = base_url.rstrip('/')
-    return f"{base_url}/sign/{token}"
+    return f"{base_url}/public/sign/{token}"
 
 
 def get_active_signing_links_for_document(

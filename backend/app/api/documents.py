@@ -2,6 +2,7 @@
 Documents API endpoints - document generation and management.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import Request
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from pydantic import BaseModel, Field
@@ -12,6 +13,7 @@ from app.core.auth import get_current_user_dependency, get_current_organization_
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.lead import Lead
+from app.models.lead_stage import LeadStage
 from app.models.document_template import DocumentTemplate
 from app.models.document import Document
 from app.models.document_signature import DocumentSignature
@@ -29,6 +31,7 @@ from app.services.signing_links import (
     get_signing_link_url,
     get_active_signing_links_for_document
 )
+from app.services.document_signing import submit_signature
 from app.core.config import FRONTEND_BASE_URL
 
 router = APIRouter()
@@ -93,9 +96,11 @@ class DocumentResponse(BaseModel):
     template_id: int
     title: str
     rendered_content: str
+    signature_blocks: Optional[str] = None  # JSON string with signature block metadata
     pdf_file_path: Optional[str] = None
     signing_url: Optional[str] = None
-    status: str
+    contract_type: Optional[str] = None  # 'buyer', 'seller', 'lawyer'
+    status: str  # 'draft', 'ready', 'sent', 'signed'
     created_by_user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -116,13 +121,14 @@ class DocumentCreateRequest(BaseModel):
     """Request schema for creating a document from a template."""
     template_id: int = Field(..., description="ID of the template to use")
     lead_id: int = Field(..., description="ID of the lead to generate document for")
+    contract_type: Optional[str] = Field(None, description="Type of contract: 'buyer', 'seller', or 'lawyer'")
     title: Optional[str] = Field(None, description="Optional custom title (defaults to template name + lead name)")
 
 
 class CreateSigningLinkRequest(BaseModel):
     """Request schema for creating a signing link."""
-    signer_type: str = Field(..., description="Type of signer: 'client' or 'internal'")
-    intended_signer_email: Optional[str] = Field(None, description="Email of intended signer (for client links)")
+    # signer_type removed - now determined by contract_type on document
+    intended_signer_email: Optional[str] = Field(None, description="Email of intended signer")
     expires_in_days: Optional[int] = Field(None, description="Number of days until expiration (None = no expiration)")
 
 
@@ -138,6 +144,23 @@ class CreateSigningLinkResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SubmitSignatureRequest(BaseModel):
+    """Request schema for submitting a signature."""
+    signer_name: str = Field(..., description="Name of the signer")
+    signer_email: Optional[str] = Field(None, description="Email of the signer")
+    signature_data: str = Field(..., description="Base64-encoded signature image (PNG)")
+    # signer_type removed - for internal signing, determined by contract_type; for public, use 'client'
+
+
+class SubmitSignatureResponse(BaseModel):
+    """Response schema for signature submission."""
+    success: bool
+    message: str
+    document_id: int
+    new_status: str
+    is_completed: bool
 
 
 class DocumentListResponse(BaseModel):
@@ -207,6 +230,9 @@ async def create_document(
     # Generate document title
     title = document_data.title or generate_document_title(template, lead)
     
+    # Copy signature blocks from template (can be edited later)
+    signature_blocks = template.signature_blocks
+    
     # Create document record
     new_document = Document(
         organization_id=current_organization.id,
@@ -214,7 +240,9 @@ async def create_document(
         template_id=template.id,
         title=title,
         rendered_content=rendered_content,
-        status='draft',
+        signature_blocks=signature_blocks,  # Copy from template
+        contract_type=document_data.contract_type,  # 'buyer', 'seller', or 'lawyer'
+        status='draft',  # Initial status: draft (being worked on)
         created_by_user_id=current_user.id
     )
     
@@ -326,6 +354,125 @@ async def get_document(
     return document
 
 
+class DocumentUpdateRequest(BaseModel):
+    """Request schema for updating a document."""
+    status: Optional[str] = Field(None, description="New status: 'draft', 'ready', 'sent', 'signed'")
+    rendered_content: Optional[str] = Field(None, description="Updated document content (HTML)")
+    title: Optional[str] = Field(None, description="Updated document title")
+    signature_blocks: Optional[str] = Field(None, description="Updated signature blocks JSON")
+
+
+@router.put("/{document_id}", response_model=DocumentResponse)
+async def update_document(
+    document_id: int,
+    update_data: DocumentUpdateRequest,
+    current_user: User = Depends(get_current_user_dependency),
+    current_organization: Organization = Depends(get_current_organization_dependency),
+    db: Session = Depends(get_db)
+):
+    """
+    Update a document (currently only status can be updated).
+    
+    When status is set to 'ready', the lead stage is advanced based on contract_type:
+    - 'buyer' → stage order 2 (Buyer Contract Ready)
+    - 'seller' → stage order 4 (Seller Contract Ready)
+    - 'lawyer' → stage order 6 (Lawyer Contract Ready)
+    """
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.organization_id == current_organization.id
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    # Update rendered_content if provided (for editing contracts)
+    if update_data.rendered_content is not None:
+        document.rendered_content = update_data.rendered_content
+    
+    # Update title if provided
+    if update_data.title:
+        document.title = update_data.title
+    
+    # Update signature_blocks if provided (for editing contracts)
+    if update_data.signature_blocks is not None:
+        # Validate signature blocks JSON
+        if update_data.signature_blocks:
+            try:
+                import json
+                blocks = json.loads(update_data.signature_blocks)
+                if not isinstance(blocks, list):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="signature_blocks must be a JSON array"
+                    )
+                # Basic validation
+                for block in blocks:
+                    if not isinstance(block, dict) or 'x' not in block or 'y' not in block:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Invalid signature block format"
+                        )
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid signature_blocks JSON"
+                )
+        document.signature_blocks = update_data.signature_blocks
+    
+    # Update status if provided
+    if update_data.status:
+        # Validate status value
+        valid_statuses = ['draft', 'ready', 'sent', 'signed']
+        if update_data.status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+        
+        document.status = update_data.status
+        
+        # If marking as ready, advance lead stage based on contract_type
+        if update_data.status == 'ready' and document.contract_type:
+            from app.api.leads import create_stage_history_entry
+            
+            # Map contract_type to stage name (Hebrew)
+            stage_name_map = {
+                'buyer': 'חוזה לקוח מוכן',    # Buyer Contract Ready
+                'seller': 'חוזה מוכר מוכן',   # Seller Contract Ready
+                'lawyer': 'חוזה עורך דין מוכן',  # Lawyer Contract Ready
+            }
+            
+            target_stage_name = stage_name_map.get(document.contract_type)
+            if target_stage_name:
+                # Get the target stage by name (more reliable than order due to potential duplicates)
+                target_stage = db.query(LeadStage).filter(LeadStage.name == target_stage_name).first()
+                if target_stage:
+                    lead = db.query(Lead).filter(Lead.id == document.lead_id).first()
+                    if lead and lead.stage_id != target_stage.id:
+                        # Only advance if not already at or past this stage
+                        current_stage = db.query(LeadStage).filter(LeadStage.id == lead.stage_id).first()
+                        if current_stage and current_stage.order < target_stage.order:
+                            lead.stage_id = target_stage.id
+                            create_stage_history_entry(db, lead.id, target_stage.id, current_user.id)
+                            db.add(lead)
+                            db.flush()
+    
+    document.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(document)
+    
+    # Load relationships
+    document.created_by_user = current_user
+    document.template = db.query(DocumentTemplate).filter(DocumentTemplate.id == document.template_id).first()
+    document.lead = db.query(Lead).filter(Lead.id == document.lead_id).first()
+    
+    return document
+
+
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     document_id: int,
@@ -383,19 +530,17 @@ async def create_signing_link_endpoint(
             detail="Document not found"
         )
     
-    # Validate signer_type
-    if link_data.signer_type not in ['client', 'internal']:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="signer_type must be 'client' or 'internal'"
-        )
+    # Determine signer_type based on contract_type
+    # For new workflow: all public signing links are 'client' type
+    # The contract_type on document determines what stage to advance to
+    signer_type = 'client'  # All public links are for client signing
     
     try:
         # Create signing link
         signing_link = create_signing_link(
             db=db,
             document_id=document_id,
-            signer_type=link_data.signer_type,
+            signer_type=signer_type,
             created_by_user_id=current_user.id,
             intended_signer_email=link_data.intended_signer_email,
             expires_in_days=link_data.expires_in_days
@@ -404,9 +549,9 @@ async def create_signing_link_endpoint(
         # Generate signing URL
         signing_url = get_signing_link_url(FRONTEND_BASE_URL, signing_link.token)
         
-        # Update document signing_url and status
+        # Update document signing_url and status to 'sent' (if it was 'ready')
         document.signing_url = signing_url
-        if document.status == 'draft':
+        if document.status == 'ready':
             document.status = 'sent'
         db.commit()
         
@@ -499,4 +644,112 @@ async def validate_signing_link_endpoint(
             response["signer_type"] = signing_link.signer_type
     
     return response
+
+
+@router.post("/{document_id}/sign", response_model=SubmitSignatureResponse, status_code=status.HTTP_201_CREATED)
+async def submit_internal_signature(
+    document_id: int,
+    signature_data: SubmitSignatureRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user_dependency),
+    current_organization: Organization = Depends(get_current_organization_dependency),
+    db: Session = Depends(get_db)
+):
+    """
+    Submit an internal signature for a document (requires authentication).
+    
+    This endpoint:
+    1. Validates the document exists and belongs to the organization
+    2. Validates the signature data
+    3. Creates a DocumentSignature record
+    4. Updates document status
+    5. Advances lead stage if needed
+    """
+    # Verify document exists and belongs to organization
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.organization_id == current_organization.id
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    # For internal signing, determine signer_type based on contract_type
+    # Lawyer contracts can be signed internally, buyer/seller contracts are signed via public link
+    if document.contract_type == 'lawyer':
+        signer_type = 'internal'  # Lawyer signs internally
+    else:
+        # For buyer/seller contracts signed internally (edge case), use 'internal'
+        signer_type = 'internal'
+    
+    # Check if signature already exists for this document
+    existing_signature = db.query(DocumentSignature).filter(
+        DocumentSignature.document_id == document_id
+    ).first()
+    
+    if existing_signature:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This document has already been signed"
+        )
+    
+    # Validate signature data format (should be base64 PNG)
+    signature_data_value = signature_data.signature_data
+    if not signature_data_value.startswith("data:image/png;base64,"):
+        # Allow both formats: with or without data URI prefix
+        if not signature_data_value.startswith("data:image"):
+            # If it's just base64, assume it's PNG
+            signature_data_value = f"data:image/png;base64,{signature_data_value}"
+    
+    # Validate signer_name
+    if not signature_data.signer_name or not signature_data.signer_name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Signer name is required"
+        )
+    
+    try:
+        # Get client IP and user agent
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        
+        # Use current user's name if signer_name not provided or use provided name
+        signer_name = signature_data.signer_name.strip() or current_user.full_name or current_user.email
+        
+        # Submit signature
+        signature, new_status, is_completed = submit_signature(
+            db=db,
+            document_id=document_id,
+            signer_type=signer_type,  # Determined above based on contract_type
+            signer_name=signer_name,
+            signature_data=signature_data_value,
+            signer_email=signature_data.signer_email or current_user.email,
+            signing_token=None,  # Internal signing, no token
+            signer_user_id=current_user.id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        return SubmitSignatureResponse(
+            success=True,
+            message="Signature submitted successfully",
+            document_id=document_id,
+            new_status=new_status,
+            is_completed=is_completed
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to submit signature: {str(e)}"
+        )
 

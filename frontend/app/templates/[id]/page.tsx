@@ -7,8 +7,7 @@ import { fetchTemplate, updateTemplate, createTemplate, type Template } from '@/
 import { useOrganizationContext } from '@/contexts/OrganizationContext'
 import TipTapEditor, { TipTapEditorRef } from '@/components/TipTapEditor'
 import { ArrowRight, Save, X } from 'lucide-react'
-import SignatureBlocksCanvas from '@/components/SignatureBlocksCanvas'
-import { SignatureBlock, serializeSignatureBlocks, deserializeSignatureBlocks, createSignatureBlock } from '@/lib/signatureBlocks'
+import { SignatureBlock, serializeSignatureBlocks, deserializeSignatureBlocks } from '@/lib/signatureBlocks'
 
 export default function TemplateEditorPage() {
   const router = useRouter()
@@ -47,11 +46,14 @@ export default function TemplateEditorPage() {
       return
     }
 
+    // Capture validated template ID
+    const validatedTemplateId = templateId
+
     async function loadTemplate() {
       setLoading(true)
       setError(null)
       try {
-        const data = await fetchTemplate(parseInt(templateId))
+        const data = await fetchTemplate(parseInt(validatedTemplateId))
         setTemplate(data)
         setName(data.name)
         setDescription(data.description || '')
@@ -129,7 +131,8 @@ export default function TemplateEditorPage() {
         router.push(`/templates/${newTemplate.id}`)
       } else {
         // Update existing template
-        const updated = await updateTemplate(parseInt(templateId!), {
+        if (!templateId || isNaN(parseInt(templateId))) return
+        const updated = await updateTemplate(parseInt(templateId), {
           name: name.trim(),
           description: description.trim() || null,
           content: content,
@@ -252,33 +255,6 @@ export default function TemplateEditorPage() {
             content={content}
             onChange={setContent}
             editable={true}
-            onAddSignatureBlock={(type) => {
-              const container = editorContainerRef.current;
-              if (!container) return;
-              
-              // Get the ProseMirror editor element for accurate positioning
-              const editorElement = container.querySelector('.ProseMirror');
-              if (!editorElement) return;
-              
-              const rect = editorElement.getBoundingClientRect();
-              const containerRect = container.getBoundingClientRect();
-              
-              // Calculate position relative to container, accounting for editor padding
-              const x = Math.max(0, (rect.width / 2) - 100);
-              const y = Math.max(0, (rect.height / 2) - 40);
-              
-              const newBlock = createSignatureBlock(type, x, y);
-              console.log('Creating signature block:', { type, x, y, newBlock });
-              const updated = [...signatureBlocks, newBlock];
-              console.log('Updated blocks array:', updated);
-              setSignatureBlocks(updated);
-            }}
-          />
-          {/* Signature Blocks Canvas Overlay */}
-          <SignatureBlocksCanvas
-            blocks={signatureBlocks}
-            onUpdate={setSignatureBlocks}
-            containerRef={editorContainerRef}
           />
         </div>
       </div>

@@ -53,9 +53,10 @@ export default function Sidebar() {
   const { organizations, isLoading: orgsLoading, switchOrganization, isSwitching } = useOrganizations()
   const { currentOrganizationId, setCurrentOrganizationId } = useOrganizationContext()
 
-  // Don't show sidebar on landing page, login, register, or template editor
+  // Don't show sidebar on landing page, login, register, template editor, or document editor
   const isTemplateEditor = pathname?.includes('/templates/') && pathname?.includes('/edit')
-  if (pathname === '/' || pathname === '/login' || pathname === '/register' || isTemplateEditor) {
+  const isDocumentEditor = pathname?.includes('/documents/') && pathname?.includes('/edit')
+  if (pathname === '/' || pathname === '/login' || pathname === '/register' || isTemplateEditor || isDocumentEditor) {
     return null
   }
 

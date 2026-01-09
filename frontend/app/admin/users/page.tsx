@@ -9,6 +9,19 @@ import { API_BASE_URL } from '@/lib/config'
 import apiClient from '@/lib/api'
 // Subscription functionality removed for CRM
 
+// Stub functions for removed subscription functionality
+async function fetchUserSubscription(userId: number): Promise<any> {
+  return null
+}
+
+async function fetchSubscriptionPlans(): Promise<any[]> {
+  return []
+}
+
+async function updateUserSubscription(userId: number, updates: any): Promise<any> {
+  return {}
+}
+
 interface UserListItem {
   id: number
   email: string
@@ -322,18 +335,10 @@ function UserCard({
   const queryClient = useQueryClient()
   const router = useRouter()
   
-  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
-    queryKey: ['admin', 'user', user.id, 'subscription'],
-    queryFn: () => fetchUserSubscription(user.id),
-    enabled: isExpanded,
-    retry: false,
-  })
-
-  const { data: plans = [] } = useQuery({
-    queryKey: ['admin', 'subscription-plans'],
-    queryFn: fetchSubscriptionPlans,
-    enabled: isExpanded,
-  })
+  // Subscription functionality removed for CRM MVP
+  const subscription: any = null
+  const subscriptionLoading = false
+  const plans: any[] = []
 
   const updateUserMutation = useMutation({
     mutationFn: ({ userId, updates }: { userId: number; updates: any }) => updateUser(userId, updates),

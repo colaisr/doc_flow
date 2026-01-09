@@ -44,9 +44,10 @@ export default function TopBar() {
   const pathname = usePathname()
   const { isCollapsed } = useSidebar()
 
-  // Don't show top bar on landing page, login, register, or template editor
+  // Don't show top bar on landing page, login, register, template editor, or document editor
   const isTemplateEditor = pathname?.includes('/templates/') && pathname?.includes('/edit')
-  if (pathname === '/' || pathname === '/login' || pathname === '/register' || isTemplateEditor) {
+  const isDocumentEditor = pathname?.includes('/documents/') && pathname?.includes('/edit')
+  if (pathname === '/' || pathname === '/login' || pathname === '/register' || isTemplateEditor || isDocumentEditor) {
     return null
   }
 

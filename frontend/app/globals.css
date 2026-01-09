@@ -228,3 +228,108 @@ div.react-joyride__beacon__outer,
   }
 }
 
+/* Signature Canvas Styles */
+.signature-canvas-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.signature-canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.signature-canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure signature canvas is interactive on mobile */
+@media (hover: none) and (pointer: coarse) {
+  .signature-canvas {
+    touch-action: none;
+  }
+}
+
+/* Document content display styles */
+.prose {
+  color: #374151;
+  max-width: none;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  color: #111827;
+  font-weight: 600;
+  margin-top: 2em;
+  margin-bottom: 1em;
+}
+
+.prose h1 {
+  font-size: 2.25em;
+}
+
+.prose h2 {
+  font-size: 1.875em;
+}
+
+.prose h3 {
+  font-size: 1.5em;
+}
+
+.prose p {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+}
+
+.prose ul,
+.prose ol {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  padding-right: 1.625em;
+  padding-left: 0;
+}
+
+.prose li {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose strong {
+  font-weight: 600;
+}
+
+.prose em {
+  font-style: italic;
+}
+
+.prose u {
+  text-decoration: underline;
+}
+
+.prose a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.prose a:hover {
+  color: #1d4ed8;
+}
+
+/* RTL support for prose content */
+.prose[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+.prose[dir="rtl"] ul,
+.prose[dir="rtl"] ol {
+  padding-right: 1.625em;
+  padding-left: 0;
+}
