@@ -469,13 +469,23 @@ export default function LeadDetailsPage() {
                             </div>
                           )}
                           
-                          <button
-                            onClick={() => router.push(`/documents/${doc.id}/edit`)}
-                            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                            ערוך
-                          </button>
+                          {doc.status === 'signed' ? (
+                            <button
+                              onClick={() => router.push(`/documents/${doc.id}/view`)}
+                              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                              הצג
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => router.push(`/documents/${doc.id}/edit`)}
+                              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                              ערוך
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -525,13 +535,23 @@ export default function LeadDetailsPage() {
                             </div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => router.push(`/documents/${doc.id}/edit`)}
-                          className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                          ערוך
-                        </button>
+                        {doc.status === 'signed' ? (
+                          <button
+                            onClick={() => router.push(`/documents/${doc.id}/view`)}
+                            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                            הצג
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => router.push(`/documents/${doc.id}/edit`)}
+                            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                            ערוך
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

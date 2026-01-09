@@ -236,14 +236,24 @@ export async function submitSignature(
 /**
  * Get public signing page data (no auth required)
  */
+export interface SignatureBlockStatus {
+  block_id: string
+  is_signed: boolean
+  signature_data?: string | null // Base64 signature image if signed
+  signer_name?: string | null
+  signed_at?: string | null
+}
+
 export interface PublicSigningPageData {
   document_id: number
   document_title: string
   rendered_content: string
   signature_blocks: string | null
+  signature_statuses: SignatureBlockStatus[]
   signer_type: string
   signer_email: string | null
   token_valid: boolean
+  all_blocks_signed: boolean
 }
 
 export async function getPublicSigningPage(token: string): Promise<PublicSigningPageData> {
@@ -256,16 +266,35 @@ export async function getPublicSigningPage(token: string): Promise<PublicSigning
  * Submit signature via public link (no auth required)
  */
 export interface SubmitPublicSignatureRequest {
+  signature_block_id: string // ID of the signature block to sign
   signer_name: string
   signer_email?: string | null
   signature_data: string // Base64 PNG image
 }
 
+export interface SubmitPublicSignatureResponse {
+  success: boolean
+  message: string
+  document_id: number
+  signature_block_id: string
+  all_blocks_signed: boolean
+  remaining_blocks: number
+}
+
 export async function submitPublicSignature(
   token: string,
   data: SubmitPublicSignatureRequest
-): Promise<SubmitSignatureResponse> {
+): Promise<SubmitPublicSignatureResponse> {
   const url = `${getApiUrl()}/api/public/sign/${token}/sign`
-  const response = await apiClient.post<SubmitSignatureResponse>(url, data)
+  const response = await apiClient.post<SubmitPublicSignatureResponse>(url, data)
+  return response.data
+}
+
+/**
+ * Finish signing process - marks document as signed and advances lead stage
+ */
+export async function finishPublicSigning(token: string): Promise<SubmitPublicSignatureResponse> {
+  const url = `${getApiUrl()}/api/public/sign/${token}/finish`
+  const response = await apiClient.post<SubmitPublicSignatureResponse>(url)
   return response.data
 }

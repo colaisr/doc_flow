@@ -47,7 +47,8 @@ export default function TopBar() {
   // Don't show top bar on landing page, login, register, template editor, or document editor
   const isTemplateEditor = pathname?.includes('/templates/') && pathname?.includes('/edit')
   const isDocumentEditor = pathname?.includes('/documents/') && pathname?.includes('/edit')
-  if (pathname === '/' || pathname === '/login' || pathname === '/register' || isTemplateEditor || isDocumentEditor) {
+  const isDocumentView = pathname?.includes('/documents/') && pathname?.includes('/view')
+  if (pathname === '/' || pathname === '/login' || pathname === '/register' || isTemplateEditor || isDocumentEditor || isDocumentView) {
     return null
   }
 

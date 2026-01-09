@@ -47,9 +47,13 @@ const GoogleDocsEditor = forwardRef<GoogleDocsEditorRef, GoogleDocsEditorProps>(
   const handleAddSignatureBlock = useCallback(() => {
     if (!onSignatureBlocksUpdate || !editorContentRef.current) return;
     
-    // Center on first page (accounting for padding)
-    const x = Math.floor((A4_WIDTH_PX - PAGE_PADDING_PX * 2 - DEFAULT_SIGNATURE_BLOCK_WIDTH) / 2);
-    const y = Math.floor((CONTENT_HEIGHT_PX - DEFAULT_SIGNATURE_BLOCK_HEIGHT) / 2);
+    // Center on first page - coordinates are relative to page wrapper (not content area)
+    // Content area is 666px wide (794 - 128), centered in 794px page = starts at 64px
+    // To center a 200px block in content area: center at 64 + 333 = 397px, block left at 397 - 100 = 297px
+    const contentAreaWidth = A4_WIDTH_PX - PAGE_PADDING_PX * 2;
+    const contentAreaHeight = CONTENT_HEIGHT_PX;
+    const x = Math.floor(PAGE_PADDING_PX + (contentAreaWidth - DEFAULT_SIGNATURE_BLOCK_WIDTH) / 2);
+    const y = Math.floor(PAGE_PADDING_PX + (contentAreaHeight - DEFAULT_SIGNATURE_BLOCK_HEIGHT) / 2);
     
     const newBlock = createSignatureBlock(x, y);
     onSignatureBlocksUpdate([...signatureBlocks, newBlock]);

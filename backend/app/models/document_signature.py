@@ -13,6 +13,7 @@ class DocumentSignature(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey('documents.id'), nullable=False, index=True)
+    signature_block_id = Column(String(255), nullable=True, index=True)  # ID of the signature block from signature_blocks JSON
     
     signer_type = Column(String(20), nullable=False)  # 'client' or 'internal'
     signer_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # NULL for client (token-based)

@@ -302,15 +302,22 @@ A web-based MVP combining CRM functionality with document generation and electro
 **Properties:**
 - `id` (Integer, Primary Key)
 - `document_id` (Integer, Foreign Key)
+- `signature_block_id` (String, Optional) - ID of the signature block from signature_blocks JSON (allows per-block signing)
 - `signer_type` (String) - `'client'` or `'internal'`
 - `signer_user_id` (Integer, Foreign Key, Optional) - NULL for client (token-based)
 - `signer_name` (String) - Name of signer
 - `signer_email` (String, Optional) - Email of signer
-- `signature_data` (Text) - Base64-encoded signature image or JSON
+- `signature_data` (Text) - Base64-encoded signature image (PNG format)
 - `signing_token` (String, Optional) - Token used for signing (client only)
 - `ip_address` (String, Optional)
 - `user_agent` (String, Optional)
 - `signed_at` (DateTime)
+
+**Per-Block Signing:**
+- Multiple signatures per document (one per signature block)
+- Each signature is linked to a specific `signature_block_id`
+- Allows signing individual blocks independently
+- Document is considered "signed" when all blocks are signed (or user explicitly finishes)
 
 **Relationships:**
 - Many-to-one with Document
@@ -1085,64 +1092,116 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-### 9.3 Public Signing Page
+### 9.3 Public Signing Page (DocuSign/SignNow Style)
 
 **Endpoint:** `GET /api/public/sign/{token}`
 
 **Response:**
 - Document details (title, rendered_content, signature_blocks)
+- Signature statuses for each block (which blocks are signed, signature images, signer info)
 - Signer type information
 - Expiration and usage status
-- Read-only document view with signature blocks positioned
+- `all_blocks_signed` flag indicating if all blocks have been signed
 
 **Frontend Route:** `/public/sign/[token]`
 
-**Features:**
+**Features (DocuSign/SignNow Style):**
+- **Read-only document view:** Document displayed in A4 layout matching editor exactly
+- **Signature blocks overlay:** 
+  - Signed blocks show signature image with signer name and date
+  - Unsigned blocks show clickable blue placeholder with pen icon
+  - Blocks positioned exactly as in editor
+- **Per-block signing:**
+  - Click an unsigned block → opens modal to sign that specific block
+  - Each block can be signed independently
+  - Signatures stored with `signature_block_id` linking to specific block
+- **Smart suggestions:**
+  - After first signature, shows hint to sign remaining blocks
+  - Displays count of remaining unsigned blocks
+- **Finish button:**
+  - Appears at bottom when all blocks are signed
+  - Marks document as 'signed' and advances lead stage
+  - Marks signing link as used
+- **Incomplete signing allowed:**
+  - User can sign some blocks and leave others unsigned
+  - Can return later to sign remaining blocks
+  - Document only marked as 'signed' when user clicks "Finish"
 - Token validation (checks expiration, usage status)
-- Display rendered document with merged lead data
-- Signature canvas for capturing handwritten signature
-- Form fields: signer name, email (pre-filled from link if available)
-- Submit signature button
-- Success confirmation after signing
+- Form fields in modal: signer name, email (pre-filled from link if available)
+- Success confirmation after finishing
 
 **Status:** ✅ Implemented
 
 ---
 
-### 9.4 Submit Signature (Public)
+### 9.4 Submit Signature (Public) - Per-Block Signing
 
 **Endpoint:** `POST /api/public/sign/{token}/sign`
 
 **Request:**
 ```json
 {
+  "signature_block_id": "sig_1234567890_abc",  // ID of the signature block to sign
   "signer_name": "John Doe",
   "signer_email": "john@example.com",
-  "signature_data": "data:image/png;base64,iVBORw0KG...",
-  "signer_type": "client"
+  "signature_data": "data:image/png;base64,iVBORw0KG..."  // Base64 PNG signature image
 }
 ```
 
 **Process:**
 1. Validate token and expiration
-2. Check if link already used
-3. Create DocumentSignature record with `signer_type='client'` and `signing_token`
-4. Update document status to `'signed'`
+2. Validate `signature_block_id` exists in document's signature blocks
+3. Check if this specific block is already signed (prevents duplicate signatures on same block)
+4. Create DocumentSignature record with:
+   - `signature_block_id` linking to the specific block
+   - `signer_type='client'` and `signing_token`
+   - Signature image data
+5. Check if all blocks are now signed
+6. Return response with `all_blocks_signed` flag and `remaining_blocks` count
+7. **Note:** Document status remains as 'sent' until user clicks "Finish"
+8. Log IP address and user agent
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Signature submitted successfully",
+  "document_id": 10,
+  "signature_block_id": "sig_1234567890_abc",
+  "all_blocks_signed": false,
+  "remaining_blocks": 2
+}
+```
+
+**Status:** ✅ Implemented
+
+---
+
+### 9.4.1 Finish Signing Process
+
+**Endpoint:** `POST /api/public/sign/{token}/finish`
+
+**Process:**
+1. Validate token and expiration
+2. Verify all signature blocks have been signed
+3. Update document status to `'signed'`
+4. Set `completed_at` timestamp
 5. Auto-advance lead stage based on document's `contract_type`:
    - Buyer contract → "חתום על ידי לקוח" (Buyer Signed - order 3)
    - Seller contract → "חתום על ידי מוכר" (Seller Signed - order 5)
    - Lawyer contract → "חתום על ידי עורך דין" (Lawyer Signed - order 7)
 6. Mark signing link as used
 7. Create LeadStageHistory entry
-8. Log IP address and user agent
-9. Set `completed_at` timestamp
 
 **Response:**
 ```json
 {
-  "message": "Signature submitted successfully",
-  "document_status": "signed_by_client",
-  "signature_id": 123
+  "success": true,
+  "message": "Document signing completed successfully",
+  "document_id": 10,
+  "signature_block_id": "",
+  "all_blocks_signed": true,
+  "remaining_blocks": 0
 }
 ```
 
@@ -1457,7 +1516,9 @@ A web-based MVP combining CRM functionality with document generation and electro
       - "פתח" (Open) button - opens signing link in new tab
       - If no signing link exists, "צור קישור" (Create Link) button appears
       - Creating a link automatically copies it to clipboard
-    - "ערוך" (Edit) button - opens unified editor
+    - **Action buttons:**
+      - For draft/ready/sent contracts: "ערוך" (Edit) button - opens unified editor
+      - For signed contracts: "הצג" (View) button - opens read-only view page with signatures
 - **Document Creation Modal** (`CreateDocumentModal` component):
   - First step: Contract type selection (Buyer/Seller/Lawyer)
   - Second step: Template selection with visual feedback
@@ -1499,6 +1560,7 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ### 14.5 Document Pages
 - `/documents/[id]/edit` - Document editor page (unified with template editor) ✅ Implemented
+- `/documents/[id]/view` - Document view page (read-only, for signed documents) ✅ Implemented
 - `/documents/[id]/sign` - Internal signing page ✅ Implemented
 
 **Document Editor Page Features:** ✅ Implemented
@@ -1518,6 +1580,19 @@ A web-based MVP combining CRM functionality with document generation and electro
 - Redirects to lead page after marking as ready
 - Clean layout without sidebar/topbar (same as template editor)
 
+**Document View Page Features:** ✅ Implemented
+- **Read-only view:** Displays signed document in A4 layout matching editor exactly
+- **Signature display:** Shows all signatures overlaid on document at their exact positions
+- **Signature images:** Each signed block displays the signature image with signer name and date
+- **PDF Export:** "ייצא ל-PDF" (Export to PDF) button opens browser print dialog
+  - Generates print-ready HTML with document content and signatures
+  - Signatures positioned correctly in PDF output
+  - A4 page size with proper margins
+- **Document metadata:** Shows document title, contract type, and signature count
+- **Navigation:** "חזור לליד" (Back to Lead) button
+- Clean layout without sidebar/topbar (full-page view)
+- No edit option for signed documents (read-only)
+
 **Internal Signing Page Features:** ✅ Implemented
 - Display document content
 - Signature canvas component for capturing signature
@@ -1534,19 +1609,32 @@ A web-based MVP combining CRM functionality with document generation and electro
 - `/public/sign/[token]` - Public signing page ✅ Implemented
 - `/public/form/[token]` - Public form submission page ⏳ To Be Implemented
 
-**Public Signing Page Features:** ✅ Implemented
+**Public Signing Page Features:** ✅ Implemented (DocuSign/SignNow Style)
+- **Read-only document view:** A4 layout matching editor exactly, document content is read-only
+- **Interactive signature blocks:**
+  - Signed blocks: Show signature image with green border, signer name, and date
+  - Unsigned blocks: Blue dashed placeholder with pen icon, clickable
+  - Clicking unsigned block opens modal to sign that specific block
+- **Per-block signing:**
+  - Each signature block can be signed independently
+  - Multiple signatures per document (one per block)
+  - Signatures stored with `signature_block_id` linking to specific block
+- **Smart workflow:**
+  - After first signature, shows hint suggesting to sign remaining blocks
+  - Displays count of remaining unsigned blocks
+  - Can leave document partially signed and return later
+- **Finish button:**
+  - Appears at bottom when all blocks are signed
+  - Marks document as 'signed' and advances lead stage
+  - Marks signing link as used
 - Token-based access (no authentication required)
 - Token validation (checks expiration, usage status)
-- Display document title and rendered content
-- Signature blocks positioned on document (via overlay)
-- Signature canvas component for capturing handwritten signature
-- Form fields: signer name (required), signer email (pre-filled if available from link)
-- Submit signature button
+- Modal for signing individual blocks with signature canvas
+- Form fields in modal: signer name (required), signer email (pre-filled if available)
 - Loading states during submission
-- Error handling (expired link, already used, invalid token)
-- Success confirmation page after signing
-- Automatic document status update to 'signed_by_client'
-- Automatic lead stage advancement to "חתום על ידי לקוח"
+- Error handling (expired link, already used, invalid token, block already signed)
+- Success confirmation page after finishing
+- Automatic lead stage advancement based on `contract_type` when finished
 - RTL layout with Hebrew UI
 
 ---
@@ -1656,9 +1744,51 @@ A web-based MVP combining CRM functionality with document generation and electro
 
 ---
 
-**Document Version:** 1.5  
+**Document Version:** 1.6  
 **Last Updated:** January 2026  
 **Latest Changes:**
+- **Per-Block Signing System (DocuSign/SignNow Style):**
+  - Added `signature_block_id` to DocumentSignature model (migration)
+  - Multiple signatures per document (one per signature block)
+  - Each signature linked to specific block via `signature_block_id`
+  - Backend API updated to support per-block signing:
+    - `POST /api/public/sign/{token}/sign` now requires `signature_block_id`
+    - Returns `all_blocks_signed` flag and `remaining_blocks` count
+    - New `POST /api/public/sign/{token}/finish` endpoint to complete signing
+  - Document status remains 'sent' until user explicitly finishes (all blocks signed)
+  - Signing link marked as used only when document is finished
+
+- **Enhanced Public Signing Page:**
+  - Complete redesign to match DocuSign/SignNow UX
+  - Read-only document view with A4 layout matching editor exactly
+  - Interactive signature blocks overlay:
+    - Signed blocks: Show signature image with green border, signer name, date
+    - Unsigned blocks: Blue dashed placeholder with pen icon, clickable
+  - Click block → opens modal to sign that specific block
+  - After first signature: Shows hint to sign remaining blocks
+  - "Finish" button appears when all blocks are signed
+  - Incomplete signing allowed (can leave some blocks unsigned)
+  - Smart coordinate detection for old vs new block formats
+
+- **Document View Page for Signed Documents:**
+  - New route: `/documents/[id]/view` for read-only signed document viewing
+  - Displays document with signatures overlaid at exact positions
+  - Shows signature images with signer name and date
+  - PDF Export button: Opens browser print dialog with document + signatures
+  - Clean full-page layout (no sidebar/topbar)
+  - No edit option for signed documents
+
+- **Updated Contract Cards:**
+  - Signed contracts show "הצג" (View) instead of "ערוך" (Edit)
+  - View button navigates to document view page
+  - Draft/ready/sent contracts still show "ערוך" (Edit) button
+
+- **Backend API Updates:**
+  - `DocumentSignatureResponse` now includes `signature_block_id` and `signature_data`
+  - `GET /api/public/sign/{token}` returns `signature_statuses` array with per-block status
+  - `GET /api/documents/{id}` with `include_signatures=true` returns signature data
+
+**Previous Changes:**
 - **Contract Workflow Implementation:**
   - Reorganized lead stages to match contract-specific workflow:
     1. ליד חדש (New Lead) - order: 1

@@ -23,8 +23,9 @@ export default function LayoutWrapper({
   const isSigningPage = pathname?.includes('/documents/') && pathname?.endsWith('/sign')
   const isTemplateEditor = pathname?.includes('/templates/') && pathname?.includes('/edit')
   const isDocumentEditor = pathname?.includes('/documents/') && pathname?.includes('/edit')
+  const isDocumentView = pathname?.includes('/documents/') && pathname?.includes('/view')
 
-  if (isAuthPage || isPublicRAGPage || isPublicSigningPage || isSigningPage || isTemplateEditor || isDocumentEditor) {
+  if (isAuthPage || isPublicRAGPage || isPublicSigningPage || isSigningPage || isTemplateEditor || isDocumentEditor || isDocumentView) {
     return <>{children}</>
   }
 

@@ -66,9 +66,11 @@ class DocumentLeadInfoResponse(BaseModel):
 
 class DocumentSignatureResponse(BaseModel):
     id: int
+    signature_block_id: Optional[str] = None  # ID of the signature block this signature belongs to
     signer_type: str
     signer_name: str
     signer_email: Optional[str] = None
+    signature_data: Optional[str] = None  # Base64-encoded signature image (only included when viewing signed document)
     signed_at: datetime
 
     class Config:
