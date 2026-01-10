@@ -120,16 +120,33 @@ export default function UnifiedEditor({ itemId, isNew, isDocumentEdit }: Unified
       setError(null)
 
       try {
+        console.log('Saving document:', {
+          documentId: parseInt(itemId),
+          status: document?.status,
+          hasContent: !!content,
+          hasTitle: !!name.trim(),
+          signatureBlocksCount: signatureBlocks.length
+        })
+        
         const updatedDoc = await updateDocument(parseInt(itemId), {
           rendered_content: content,
           title: name.trim(),
           signature_blocks: serializeSignatureBlocks(signatureBlocks),
         })
+        
+        console.log('Document saved successfully:', updatedDoc)
         setDocument(updatedDoc)
         setIsDirty(false)
       } catch (err: any) {
-        setError(err.message || 'שגיאה בשמירת המסמך')
-        console.error('Failed to save document:', err)
+        const errorMessage = err.response?.data?.detail || err.message || 'שגיאה בשמירת המסמך'
+        setError(errorMessage)
+        console.error('Failed to save document:', {
+          error: err,
+          response: err.response,
+          message: err.message,
+          documentId: parseInt(itemId),
+          documentStatus: document?.status
+        })
       } finally {
         setSaving(false)
       }
