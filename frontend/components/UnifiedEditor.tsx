@@ -136,6 +136,9 @@ export default function UnifiedEditor({ itemId, isNew, isDocumentEdit }: Unified
         
         console.log('Document saved successfully:', updatedDoc)
         setDocument(updatedDoc)
+        // Update content state with the saved rendered_content (merge fields replaced)
+        // This ensures the editor shows the saved content and dirty state is cleared
+        setContent(updatedDoc.rendered_content || '<p></p>')
         setIsDirty(false)
       } catch (err: any) {
         const errorMessage = err.response?.data?.detail || err.message || 'שגיאה בשמירת המסמך'
