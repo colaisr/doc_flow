@@ -44,7 +44,9 @@ def replace_merge_fields(content: str, lead: Lead) -> str:
     """
     Replace merge fields in template content with actual lead values.
     
-    Pattern: {{lead.field_key}}
+    Supports two formats:
+    1. Plain text: {{lead.field_key}}
+    2. TipTap HTML: <span data-field-key="field_key" data-merge-field="true" ...>{{lead.field_key}}</span>
     
     Args:
         content: HTML template content with merge fields
@@ -53,18 +55,40 @@ def replace_merge_fields(content: str, lead: Lead) -> str:
     Returns:
         HTML content with merge fields replaced
     """
-    # Pattern to match {{lead.field_key}}
-    pattern = r'\{\{lead\.(\w+)\}\}'
+    # First, handle TipTap HTML format: <span data-field-key="field_key" data-merge-field="true" ...>...</span>
+    # This pattern matches TipTap merge field spans (attributes can be in any order)
+    # We match any span that contains both data-merge-field="true" and data-field-key attributes
+    tiptap_pattern = r'<span[^>]*data-merge-field=["\']true["\'][^>]*>.*?</span>'
     
-    def replace_match(match: re.Match) -> str:
+    def replace_tiptap_match(match: re.Match) -> str:
+        span_html = match.group(0)
+        # Extract field_key from data-field-key attribute (can be anywhere in the span tag)
+        field_key_match = re.search(r'data-field-key=["\'](\w+)["\']', span_html)
+        if not field_key_match:
+            return span_html  # Return unchanged if we can't extract field_key
+        
+        field_key = field_key_match.group(1)
+        field_value = get_lead_field_value(lead, field_key)
+        # HTML escape the value to prevent XSS
+        escaped_value = escape_html(field_value)
+        return escaped_value
+    
+    # Replace TipTap HTML merge fields (entire span element)
+    # Only match spans that have data-merge-field="true" AND data-field-key attribute
+    rendered_content = re.sub(tiptap_pattern, replace_tiptap_match, content, flags=re.DOTALL)
+    
+    # Then handle plain text format: {{lead.field_key}}
+    plain_pattern = r'\{\{lead\.(\w+)\}\}'
+    
+    def replace_plain_match(match: re.Match) -> str:
         field_key = match.group(1)
         field_value = get_lead_field_value(lead, field_key)
         # HTML escape the value to prevent XSS
         escaped_value = escape_html(field_value)
         return escaped_value
     
-    # Replace all merge fields
-    rendered_content = re.sub(pattern, replace_match, content)
+    # Replace plain text merge fields
+    rendered_content = re.sub(plain_pattern, replace_plain_match, rendered_content)
     
     return rendered_content
 
@@ -144,11 +168,24 @@ def validate_merge_fields(content: str, lead: Lead) -> Dict[str, Any]:
     """
     Validate that all merge fields in content can be resolved from lead.
     
+    Supports both formats:
+    1. Plain text: {{lead.field_key}}
+    2. TipTap HTML: <span data-field-key="field_key" data-merge-field="true" ...>
+    
     Returns:
         Dictionary with 'valid': bool, 'missing_fields': list, 'all_fields': list
     """
-    pattern = r'\{\{lead\.(\w+)\}\}'
-    found_fields = set(re.findall(pattern, content))
+    found_fields = set()
+    
+    # Find TipTap HTML format merge fields
+    tiptap_pattern = r'<span[^>]*data-merge-field=["\']true["\'][^>]*data-field-key=["\'](\w+)["\']'
+    tiptap_fields = re.findall(tiptap_pattern, content)
+    found_fields.update(tiptap_fields)
+    
+    # Find plain text format merge fields
+    plain_pattern = r'\{\{lead\.(\w+)\}\}'
+    plain_fields = re.findall(plain_pattern, content)
+    found_fields.update(plain_fields)
     
     missing_fields = []
     for field_key in found_fields:
