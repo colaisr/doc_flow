@@ -221,6 +221,8 @@ export default function UnifiedEditor({ itemId, isNew, isDocumentEdit }: Unified
         status: 'ready',
       })
       setDocument(updatedDoc)
+      // Update content state with the saved rendered_content (merge fields replaced)
+      setContent(updatedDoc.rendered_content || '<p></p>')
       setIsDirty(false)
       
       // Navigate back to lead page to see updated status
