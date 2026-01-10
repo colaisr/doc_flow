@@ -231,8 +231,9 @@ async def create_document(
             detail=f"Invalid merge fields: {', '.join(validation['missing_fields'])}"
         )
     
-    # Generate document content
-    rendered_content = generate_document_content(template, lead)
+    # Store template content WITH merge fields - they will be replaced on-the-fly when displaying on signing page
+    # This allows users to edit, remove, or change merge fields in the editor
+    rendered_content = template.content
     
     # Generate document title
     title = document_data.title or generate_document_title(template, lead)
