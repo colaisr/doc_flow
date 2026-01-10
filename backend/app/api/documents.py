@@ -402,7 +402,18 @@ async def update_document(
     
     # Update rendered_content if provided (for editing contracts)
     if update_data.rendered_content is not None:
-        document.rendered_content = update_data.rendered_content
+        # Re-run merge field replacement if content contains merge fields
+        # This ensures that if user edits document and adds merge fields, they get replaced
+        from app.services.document_generation import replace_merge_fields
+        
+        # Get the lead to replace merge fields
+        lead = db.query(Lead).filter(Lead.id == document.lead_id).first()
+        if lead:
+            # Replace merge fields in the updated content
+            document.rendered_content = replace_merge_fields(update_data.rendered_content, lead)
+        else:
+            # If lead not found, just save as-is (shouldn't happen, but safety check)
+            document.rendered_content = update_data.rendered_content
     
     # Update title if provided
     if update_data.title:
