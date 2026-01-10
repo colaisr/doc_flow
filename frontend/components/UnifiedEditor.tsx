@@ -136,9 +136,8 @@ export default function UnifiedEditor({ itemId, isNew, isDocumentEdit }: Unified
         
         console.log('Document saved successfully:', updatedDoc)
         setDocument(updatedDoc)
-        // Update content state with the saved rendered_content (merge fields replaced)
-        // This ensures the editor shows the saved content and dirty state is cleared
-        setContent(updatedDoc.rendered_content || '<p></p>')
+        // Content state already has the correct content (with merge fields)
+        // No need to update it - merge fields stay as tags in the editor
         setIsDirty(false)
       } catch (err: any) {
         const errorMessage = err.response?.data?.detail || err.message || 'שגיאה בשמירת המסמך'

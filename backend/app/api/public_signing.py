@@ -156,10 +156,23 @@ async def get_public_signing_page(
         except json.JSONDecodeError:
             pass
     
+    # Replace merge fields on-the-fly for signing page display
+    # Editor stores content WITH merge fields, but signing page should show replaced values
+    from app.services.document_generation import replace_merge_fields
+    from app.models.lead import Lead
+    
+    lead = db.query(Lead).filter(Lead.id == document.lead_id).first()
+    if lead and document.rendered_content:
+        # Replace merge fields with actual lead values for signing page
+        rendered_content_for_signing = replace_merge_fields(document.rendered_content, lead)
+    else:
+        # Fallback: use content as-is if lead not found
+        rendered_content_for_signing = document.rendered_content or ""
+    
     return PublicSigningPageResponse(
         document_id=document.id,
         document_title=document.title,
-        rendered_content=document.rendered_content,
+        rendered_content=rendered_content_for_signing,
         signature_blocks=signature_blocks_json,
         signature_statuses=signature_statuses,
         signer_type=signing_link.signer_type,
